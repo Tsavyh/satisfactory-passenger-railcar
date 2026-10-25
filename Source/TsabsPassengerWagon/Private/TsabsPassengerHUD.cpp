@@ -14,6 +14,12 @@
 #include "UI/FGGameUI.h"
 #include "UObject/StructOnScope.h"
 #include "UObject/UnrealType.h"
+#include "Blueprint/WidgetBlueprintGeneratedClass.h"
+#include "Components/TextBlock.h"
+#include "PassengerNativeSpeedometer.h"
+#include "TsabsPassengerRailcar.h"
+#include "FGRailroadVehicleMovementComponent.h"
+#include "PassengerCrosshair.h"
 
 UTsabsPassengerHUD::UTsabsPassengerHUD(const FObjectInitializer& Initializer) : Super(Initializer)
 {
@@ -27,6 +33,67 @@ ATsabsPassengerAnchor* UTsabsPassengerHUD::GetPassengerAnchor() const
     return PassengerAnchor.Get();
 }
 
+void UTsabsPassengerHUD::BeginCrosshairSuppression()
+{
+    APlayerController* PC = GetOwningPlayer();
+    AFGHUD* HUD = IsValid(PC) ? Cast<AFGHUD>(PC->GetHUD()) : nullptr;
+    ATsabsPassengerAnchor* Anchor = PassengerAnchor.Get();
+    if (!IsValid(PC) || !PC->IsLocalController() || !IsValid(HUD) || !IsValid(Anchor) ||
+        PC->GetPawn() != Anchor || HUD->GetPawnHUD() != this)
+    {
+        EndCrosshairSuppression();
+        return;
+    }
+    if (CrosshairToken && CrosshairHUD.Get() == HUD && CrosshairController.Get() == PC) return;
+    EndCrosshairSuppression();
+    CrosshairHUD = HUD;
+    CrosshairController = PC;
+    CrosshairToken = TsabsPassenger::RegisterPassengerCrosshair(this);
+    PC->OnPossessedPawnChanged.AddUniqueDynamic(this, &UTsabsPassengerHUD::OnPassengerPawnChanged);
+    // Request a presentation refresh, not a preference or force-hide mutation.
+    // SDK .cpp is a stub; real native event dispatch remains a runtime gate.
+    HUD->SetCrosshairState(HUD->GetCrosshairState());
+}
+
+bool UTsabsPassengerHUD::ShouldSuppressPassengerCrosshair(const FMulticastScriptDelegate& Delegate) const
+{
+    APlayerController* PC = CrosshairController.Get();
+    AFGHUD* HUD = CrosshairHUD.Get();
+    ATsabsPassengerAnchor* Anchor = PassengerAnchor.Get();
+    return CrosshairToken && IsValid(PC) && PC == GetOwningPlayer() && PC->IsLocalController() &&
+        IsValid(Anchor) && PC->GetPawn() == Anchor && IsValid(HUD) && PC->GetHUD() == HUD &&
+        HUD->GetPawnHUD() == this && &Delegate == &HUD->mOnCrosshairUpdated;
+}
+
+void UTsabsPassengerHUD::EndCrosshairSuppression()
+{
+    if (!CrosshairToken) return;
+    APlayerController* PC = CrosshairController.Get();
+    AFGHUD* HUD = CrosshairHUD.Get();
+    const uint64 OwnToken = CrosshairToken;
+    CrosshairToken = 0; // Retire before callbacks/refresh; never touch a replacement token.
+    TsabsPassenger::UnregisterPassengerCrosshair(OwnToken);
+    if (IsValid(PC)) PC->OnPossessedPawnChanged.RemoveDynamic(this, &UTsabsPassengerHUD::OnPassengerPawnChanged);
+    CrosshairController.Reset();
+    CrosshairHUD.Reset();
+    if (IsValid(PC) && PC->IsLocalController() && IsValid(HUD) && PC->GetHUD() == HUD)
+        HUD->SetCrosshairState(HUD->GetCrosshairState());
+}
+
+void UTsabsPassengerHUD::OnPassengerPawnChanged(APawn* OldPawn, APawn* NewPawn)
+{
+    if (NewPawn == PassengerAnchor.Get()) return;
+    EndCrosshairSuppression();
+    RefreshPassengerSpeed();
+    RemoveFromParent();
+}
+
+void UTsabsPassengerHUD::NativeDestruct()
+{
+    EndCrosshairSuppression();
+    Super::NativeDestruct();
+}
+
 FText UTsabsPassengerHUD::FormatExitPrompt(const FText& LeaveKey, bool bWithinSpeedLimit)
 {
     if (!bWithinSpeedLimit) return FText::Format(NSLOCTEXT("TsabsPassenger", "LeaveSpeedLimit",
@@ -35,6 +102,17 @@ FText UTsabsPassengerHUD::FormatExitPrompt(const FText& LeaveKey, bool bWithinSp
         "Bajar del vagón: acción sin tecla asignada");
     return FText::Format(NSLOCTEXT("TsabsPassenger", "LeaveStandardKey",
         "Pulsa <Key>{0}</> para bajar del vagón"), LeaveKey);
+}
+
+FText UTsabsPassengerHUD::FormatPassengerSpeed(float SpeedCmPerSecond, bool bAvailable)
+{
+    const uint32 Magnitude = std::bit_cast<uint32>(SpeedCmPerSecond) & 0x7fffffffu;
+    if (!bAvailable || Magnitude >= 0x7f800000u)
+        return NSLOCTEXT("TsabsPassenger", "SpeedUnavailable", "—");
+    FNumberFormattingOptions Options;
+    Options.SetMaximumFractionalDigits(0);
+    Options.SetUseGrouping(false);
+    return FText::AsNumber(static_cast<double>(std::bit_cast<float>(Magnitude)) * 0.036, &Options);
 }
 
 bool UTsabsPassengerHUD::CopyNativeInteractionLayout(UCanvasPanelSlot* Destination) const
@@ -59,6 +137,34 @@ bool UTsabsPassengerHUD::CopyNativeInteractionLayout(UCanvasPanelSlot* Destinati
     return false;
 }
 
+void UTsabsPassengerHUD::InitializeSpeedometer(UCanvasPanel* Canvas)
+{
+    auto* Class = Cast<UWidgetBlueprintGeneratedClass>(LoadClass<UUserWidget>(nullptr,
+        TEXT("/Game/FactoryGame/Buildable/Vehicle/Train/Locomotive/UI/Widget_Locomotive_HUD.Widget_Locomotive_HUD_C")));
+    auto* TreeOwner = Class ? Class->FindWidgetTreeOwningClass() : nullptr;
+    SpeedText = TsabsPassenger::ComposeNativeSpeedometer(WidgetTree, Canvas, TreeOwner ? TreeOwner->GetWidgetTreeArchetype() : nullptr);
+    if (!SpeedText)
+    {
+        UE_LOG(LogTsabsPassengerWagon, Warning, TEXT("TSABS_PASSENGER_HUD speed template contract unavailable; speed display omitted; no native HUD changed"));
+        return;
+    }
+    RefreshPassengerSpeed();
+}
+
+void UTsabsPassengerHUD::RefreshPassengerSpeed()
+{
+    if (!SpeedText) return;
+    ATsabsPassengerAnchor* Anchor = PassengerAnchor.Get();
+    auto* Car = Anchor ? Cast<ATsabsPassengerRailcar>(Anchor->GetOuterVehicle()) : nullptr;
+    auto* Movement = IsValid(Car) ? Car->GetRailroadVehicleMovementComponent() : nullptr;
+    const bool bValid = IsValid(Anchor) && GetOwningPlayerPawn() == Anchor && IsValid(Car) && !Car->IsTemplate() &&
+        Car->GetWorld() == Anchor->GetWorld() && Anchor->GetAttachParentActor() == Car && IsValid(Movement);
+    const FText Current = FormatPassengerSpeed(bValid ? Movement->GetForwardSpeed() : 0.0f, bValid);
+    // Compare actual text instead of caching only rounded speed: culture changes,
+    // invalid->valid recovery and external style synchronization remain coherent.
+    if (!SpeedText->GetText().EqualTo(Current)) SpeedText->SetText(Current);
+}
+
 void UTsabsPassengerHUD::NativeOnInitialized()
 {
     Super::NativeOnInitialized();
@@ -73,6 +179,7 @@ void UTsabsPassengerHUD::NativeOnInitialized()
     UCanvasPanel* Canvas = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("PassengerInteractionCanvas"));
     WidgetTree->RootWidget = Canvas;
     SetVisibility(ESlateVisibility::HitTestInvisible);
+    InitializeSpeedometer(Canvas);
     InteractionWidget = CreateWidget<UUserWidget>(GetOwningPlayer(), InteractionWidgetClass);
     if (!InteractionWidget)
     {
@@ -96,6 +203,9 @@ void UTsabsPassengerHUD::NativeOnInitialized()
 void UTsabsPassengerHUD::NativeConstruct()
 {
     Super::NativeConstruct();
+    // Rebuilds can reuse this UObject without another AddPawnHUD/input setup.
+    // Begin is idempotent and accepts only the exact current local pawn HUD.
+    BeginCrosshairSuppression();
     // Apply after the stock child's Construct graph as well as initialization.
     RefreshExitHint(true);
 }
@@ -195,8 +305,10 @@ void UTsabsPassengerHUD::RefreshExitHint(bool bForce)
 void UTsabsPassengerHUD::NativeTick(const FGeometry& Geometry, float DeltaTime)
 {
     Super::NativeTick(Geometry, DeltaTime);
+    RefreshPassengerSpeed();
     if (!PassengerAnchor.IsValid() || GetOwningPlayerPawn() != PassengerAnchor.Get())
     {
+        EndCrosshairSuppression();
         RemoveFromParent();
         return;
     }

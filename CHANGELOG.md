@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.13 — A quieter passenger view, in the railway menu
+
+- Hide the crosshair locally only for the current passenger; preserve forwarding and unrelated UI.
+- Show a minimal native black panel with dynamic speed magnitude and km/h only: no MW, scale, visor or title.
+- Place the wagon under Transport → Railway, immediately after Freight Car; keep free/unlocked experimental construction.
+- Combine the local-only 0.1.11 functional HUD and 0.1.12 visual refinement into this public preview. One invisible technical place, orbit camera, strict below-30 km/h access in either direction and normal guards remain unchanged.
+- Include inherited lifecycle regressions and new HUD/composition/menu coverage. 39 editor cases passed (36 without warnings + 3 with SDK warnings; 134 warning entries), seven package checks, Editor and Shipping/cook exit 0, and real Windows DX11 menu startup with zero streaming errors.
+- Exported MSVC 14.38 tests: 26 precise + 26 fast; two native prerequisite contracts. Singleplayer user acceptance covers HUD function, minimal appearance and menu placement, not new remote-client delivery.
+- Historical two-player/Proton evidence remains scoped to 0.1.8. The changed 0.1.10 hint and new HUD need a grouped remote check; human-driver/autopilot travel and real-game lifecycle scenarios remain pending. No new GCC/Clang/Proton/hosted CI claim.
+- Preserve current main history, PR #1 by MikelCalvo, MIT own-source license and original branding. Host and clients must all update to the same version.
+
 ## 0.1.10 — The exit hint, only when speed allows
 
 - Show the effective Leave-key instruction only below 30 km/h in magnitude. Hide it at 30 or above in both directions; do not hardcode E.

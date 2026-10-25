@@ -1,83 +1,72 @@
-![Satisfactory Passenger Railcar — original abstract railway cover](assets/banner.png)
+![Satisfactory Passenger Railcar — original railway artwork](assets/banner.png)
 
 # Satisfactory Passenger Railcar
 
 **Ride along. Let the locomotive do the driving.**  
-An unofficial, open-source passenger wagon mod for **Satisfactory on Steam**, by **Tsabs**.
+An unofficial, open-source passenger wagon for **Satisfactory on Steam**, by **Tsabs**.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-78a898?style=flat-square)](LICENSE)
-[![Preview: 0.1.10](https://img.shields.io/badge/preview-0.1.10-f3a64b?style=flat-square)](https://github.com/Tsavyh/satisfactory-passenger-railcar/releases/tag/v0.1.10)
-![Status: Experimental](https://img.shields.io/badge/status-experimental-f3a64b?style=flat-square)
+[![Preview: 0.1.13](https://img.shields.io/badge/preview-0.1.13-f3a64b?style=flat-square)](https://github.com/Tsavyh/satisfactory-passenger-railcar/releases/tag/v0.1.13)
 
-**[Download 0.1.10](https://github.com/Tsavyh/satisfactory-passenger-railcar/releases/download/v0.1.10/satisfactory-passenger-railcar-0.1.10-windows-steam.zip)** · [Español](README.es.md) · [Build from source](BUILDING.md) · [Report an issue](https://github.com/Tsavyh/satisfactory-passenger-railcar/issues/new/choose)
+**[Download 0.1.13](https://github.com/Tsavyh/satisfactory-passenger-railcar/releases/download/v0.1.13/satisfactory-passenger-railcar-0.1.13-windows-steam.zip)** · [Español](README.es.md) · [Build from source](BUILDING.md) · [Changelog](CHANGELOG.md)
 
-> **Preview release.** The tester accepted the three exit-hint/feedback checks in **singleplayer on 0.1.10**. **The changed hint still needs a remote-client check.** Baseline 0.1.8 had two-player approval and the affected Proton client passed startup. Back up saves and use a test world.
+> **Experimental preview.** The passenger HUD and railway-menu placement have singleplayer user acceptance. **The changed exit hint and new HUD still need a remote-client check.** Multiplayer and Proton evidence from 0.1.8 is historical, not certification of 0.1.13. Back up saves and use a test world.
 
-## What it does
+## A passenger wagon, not another locomotive
 
-- Adds a wagon that can be coupled to a train, with **one invisible passenger anchor per wagon** in this prototype.
-- Provides an **exterior orbit camera** without locomotive driving controls.
-- Has **no cargo inventory, walkable interior or visible seating**.
-- Allows boarding and leaving only below **30 km/h in either direction**, subject to the normal authority, occupancy and safe-exit checks. At exactly 30 km/h or above, access is blocked. This does not cap the train's travel speed.
+- **One invisible technical passenger place per wagon**, with an exterior orbit camera.
+- **No driving controls, cargo inventory, walkable interior or visible seating.**
+- Boarding and leaving require speed magnitude **strictly below 30 km/h**, forward or reverse. At exactly 30 km/h or above, access is blocked. Normal authority, occupancy and native safe-exit checks still apply; travel speed is not capped.
+- Free construction and no progression unlock during this experimental phase. Final balance and extra capacity are undecided.
 
-The prototype is available without a construction cost or progression unlock during testing. Final balance and additional passenger capacity are not decided yet.
+## New since the public 0.1.10 release
 
-## New in 0.1.10
+- **A quieter passenger view:** the crosshair is hidden locally only while riding as a passenger, without hiding unrelated players' UI.
+- **A minimal native speed panel:** black background, dynamically updated speed magnitude and **km/h**. No MW readout, scale, visor or title.
+- **Find it beside the other railway vehicles:** **Transport → Railway**, immediately after **Freight Car** (labels may be localized).
+- Inherited lifecycle regression tests remain included. Local 0.1.11 and 0.1.12 development steps are combined into this 0.1.13 preview; they were not separate public releases.
 
-The ordinary Leave-key instruction appears **only below 30 km/h** in either direction; at 30 or above it is hidden. A rejected Leave attempt shows the speed warning for **3 seconds**, then hides it again while still too fast. Slowing below 30 restores the effective-key instruction. The tester accepted these three checks in singleplayer. **Both host and clients must update.**
-
-PR #1 adds Linux policy-test tooling and a scoped Proton report without changing runtime policy. [Changelog](CHANGELOG.md).
+The effective Leave-key hint remains visible only below 30 km/h. A rejected high-speed Leave attempt shows a **3-second** warning only to the affected passenger, then hides again while too fast; slowing clears it sooner. **Host and clients must all update to the same version.**
 
 ## Install the preview
 
-**Target build:** Satisfactory Steam **1.2.4.1 / CL 513885** with **SML 3.12.0**. Other game builds and storefronts have not been verified.
+**Target:** Satisfactory Steam **1.2.4.1 / CL 513885** with **SML 3.12.0**. Other game versions and storefronts are unverified.
 
-1. Install SML with Satisfactory Mod Manager first. If SML-only startup already works, keep that setup.
-2. Close the game and download **[the installable ZIP](https://github.com/Tsavyh/satisfactory-passenger-railcar/releases/download/v0.1.10/satisfactory-passenger-railcar-0.1.10-windows-steam.zip)**. GitHub's **Source code** downloads are for developers, not an installable mod.
-3. Back up the previous wagon folder **outside** `FactoryGame/Mods`, then copy `VAGON/TsabsPassengerWagon` from the ZIP into `FactoryGame/Mods`. Keep SML separate and do not mix wagon versions.
-4. **First run: reach the menu only.** Check that version **0.1.10** is listed before loading a test world. On Proton, keep the existing Proton version and launch options unchanged for this check.
-
-Expected file location:
+1. Install SML separately with Satisfactory Mod Manager. If SML-only startup works, keep that setup.
+2. Close the game. Download **the named Windows/Steam ZIP above**, not GitHub's automatic **Source code** archives.
+3. Back up saves and move the old wagon folder **outside** `FactoryGame/Mods`. Copy `VAGON/TsabsPassengerWagon` from the ZIP into `FactoryGame/Mods`. Do not mix versions or replace SML.
+4. First reach the menu only and check version **0.1.13**. Then use a test world, not a personal save. On Proton, keep existing Proton/launch settings unchanged for the startup check.
 
 ```text
-FactoryGame/
-└── Mods/
-    ├── SML/
-    └── TsabsPassengerWagon/
-        └── TsabsPassengerWagon.uplugin
+FactoryGame/Mods/TsabsPassengerWagon/TsabsPassengerWagon.uplugin
 ```
 
-The ZIP includes an installation guide, MIT license, optional SML-only profile and integrity manifest. It does **not** include SML, the SDK or personal data. See the release's `SHA256SUMS.txt` to check the download.
+The ZIP contains six runtime files, EN/ES instructions, MIT license, an optional generic **SML-only** profile and a member-hash manifest. The profile neither includes nor installs this wagon or SML binaries. Check the release's `SHA256SUMS.txt`. No SDK, Engine/game assets, private logs, saves, account data or PDB files are distributed.
 
-<details>
-<summary><strong>If startup fails</strong></summary>
+**If startup fails:** preserve that attempt's log privately, close the game, and remove only the wagon to return to SML-only startup. Redact account identifiers, authentication/travel parameters and personal paths before sharing evidence. [Report a problem](https://github.com/Tsavyh/satisfactory-passenger-railcar/issues/new?template=bug_report.yml).
 
-Preserve the log from that attempt before starting the game again. Close the game and remove **only** the wagon folder to return to SML-only startup. Do not change several settings at once. Before sharing logs, redact account identifiers, authentication/travel URL parameters and personal paths. Use the [bug report form](https://github.com/Tsavyh/satisfactory-passenger-railcar/issues/new?template=bug_report.yml).
-</details>
+## Evidence, without shortcuts
 
-## Compatibility at a glance
-
-| Area | Current evidence |
+| Layer | Verified scope / remaining limits |
 | :--- | :--- |
-| Windows / Steam | 0.1.10 menu startup verified with DX11; three exit-hint/feedback checks accepted in singleplayer |
-| Linux / Steam / Proton | 0.1.8 reached the menu on the affected Arch Linux / Proton 10.0-4 client; [startup report and limits](docs/PROTON-STARTUP.md) |
-| Client/server multiplayer | 0.1.8 received two-player user-reported approval; new 0.1.10 notice pending focused remote check |
-| Passenger travel with a human driver or autopilot | Separate acceptance tests still pending |
+| Windows / Steam | 0.1.13 real DX11 menu startup; native prerequisite loaded; zero streaming errors |
+| Singleplayer user acceptance | 0.1.11 HUD functionality, 0.1.12 minimal-panel appearance and 0.1.13 railway-menu placement accepted |
+| Automated checks | 39 editor cases: 36 without warnings + 3 with SDK warnings (134 warning entries); 7 package checks; exported MSVC policy tests: 26 precise + 26 fast; 2 native structural checks |
+| Remote-client multiplayer | User-reported two-player approval belongs to 0.1.8; changed 0.1.10 hint and 0.1.11–0.1.13 UI remain pending a grouped remote check |
+| Linux / Proton | Historical 0.1.8 startup evidence only; [contributor report and limits](docs/PROTON-STARTUP.md). No new Proton, GCC/Clang or hosted CI run claimed for 0.1.13 |
+| Human-driver / autopilot travel | Separate acceptance tests still pending |
+| Save/load, death/disconnection and native lifecycle | Editor regressions are not real-game scenario acceptance |
 | Dedicated servers / other storefronts | No validated release provided |
 
-**0.1.8 startup fix:** explicitly retains a required native game module. In the reproduced Windows DX11 case, streaming errors fell from **454 to 0**. The affected Proton client subsequently reached the menu with zero streaming errors too; subsequent two-player multiplayer approval was reported separately. This is not exhaustive platform/lifecycle certification. [Full changelog](CHANGELOG.md).
+## Own-source MIT, exact release inputs
 
-## Source, tests and contributions
+The project's own source is **[MIT](LICENSE)**. The [v0.1.13 source snapshot](https://github.com/Tsavyh/satisfactory-passenger-railcar/tree/v0.1.13) and [`SOURCE-MANIFEST.json`](SOURCE-MANIFEST.json) identify the **58 reviewed plugin inputs** used for this binary, plus inherited public wrappers and documentation. Build paths/toolchains may prevent bit-identical rebuilds; source correspondence is not a reproducible-build claim.
 
-The project's own code is licensed under **[MIT](LICENSE)**. The [v0.1.10 tag](https://github.com/Tsavyh/satisfactory-passenger-railcar/tree/v0.1.10) matches the published binary; [`SOURCE-MANIFEST.json`](SOURCE-MANIFEST.json) records the frozen release inputs. Includes the transient exit feedback introduced in 0.1.9 and [PR #1](https://github.com/Tsavyh/satisfactory-passenger-railcar/pull/1) by [MikelCalvo](https://github.com/MikelCalvo). See [contributors](CONTRIBUTORS.md).
+- [Build instructions and test commands](BUILDING.md) · [Third-party boundaries](NOTICES.md)
+- [Contributors](CONTRIBUTORS.md): includes [PR #1](https://github.com/Tsavyh/satisfactory-passenger-railcar/pull/1) by **MikelCalvo**, with Linux tooling and scoped Proton evidence; its original merge history is preserved.
+- [Public identity and release checklist](docs/BRANDING.md)
 
-- [Build instructions and test commands](BUILDING.md)
-- [Third-party boundaries](NOTICES.md)
-- [Public presentation and release checklist](docs/BRANDING.md)
-- [Issues and feedback](https://github.com/Tsavyh/satisfactory-passenger-railcar/issues)
-
-`TsabsPassengerWagon` remains the internal plugin identifier and folder name for compatibility. The public name is **Satisfactory Passenger Railcar**. The SDK, Engine and game assets are obtained separately, not redistributed here.
+`TsabsPassengerWagon` remains the technical plugin/module/folder name for compatibility. Obtain the SDK, Engine and game resources separately; MIT does not relicense them.
 
 ---
-
-An unofficial community project for Satisfactory. Cover artwork is original project branding, **not a gameplay screenshot**.
+Unofficial community project. Cover artwork is original branding, **not a gameplay screenshot**.

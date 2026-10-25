@@ -81,7 +81,11 @@ bool FTsabsPassengerStandardExitPresentationTest::RunTest(const FString& Paramet
     UTsabsPassengerHUD* HUD = CreateWidget<UTsabsPassengerHUD>(PC, UTsabsPassengerHUD::StaticClass());
     UCanvasPanel* Root = HUD && HUD->WidgetTree ? Cast<UCanvasPanel>(HUD->WidgetTree->RootWidget) : nullptr;
     if (!TestNotNull(TEXT("Passenger presentation root"), Root)) return false;
-    UWidget* Prompt = Root->GetChildrenCount() == 1 ? Root->GetChildAt(0) : nullptr;
+    UWidget* Prompt = nullptr;
+    int32 PromptCount = 0;
+    for (UWidget* Child : Root->GetAllChildren())
+        if (Child->IsA(StockClass)) { Prompt = Child; ++PromptCount; }
+    TestEqual(TEXT("Exactly one normal interaction, independently of informational speed visuals"), PromptCount, 1);
     TestTrue(TEXT("Exit uses the same interaction widget as normal E prompts, not a bottom button bar"),
         Prompt && Prompt->IsA(StockClass));
     UCanvasPanelSlot* PromptSlot = Prompt ? Cast<UCanvasPanelSlot>(Prompt->Slot) : nullptr;

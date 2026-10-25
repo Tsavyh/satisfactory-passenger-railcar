@@ -304,12 +304,20 @@ void ATsabsPassengerAnchor::SetupPlayerInputComponent(UInputComponent* InInputCo
     if (!IsValid(Existing) || Existing->GetPassengerAnchor() != this)
         HUD->AddPawnHUD(UTsabsPassengerHUD::StaticClass(), this);
     UTsabsPassengerHUD* Created = Cast<UTsabsPassengerHUD>(HUD->GetPawnHUD());
-    if (IsValid(Created) && Created->GetPassengerAnchor() == this) PassengerHUD = Created;
+    if (IsValid(Created) && Created->GetPassengerAnchor() == this)
+    {
+        PassengerHUD = Created;
+        Created->BeginCrosshairSuppression(); // AddPawnHUD has now assigned mPawnHUD.
+    }
 }
 
 void ATsabsPassengerAnchor::RemovePassengerHUD()
 {
-    if (PassengerHUD.IsValid()) PassengerHUD->RemoveFromParent();
+    if (PassengerHUD.IsValid())
+    {
+        PassengerHUD->EndCrosshairSuppression();
+        PassengerHUD->RemoveFromParent();
+    }
     PassengerHUD.Reset();
 }
 

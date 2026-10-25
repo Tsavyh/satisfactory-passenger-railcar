@@ -2,6 +2,7 @@
 #include "Modules/ModuleManager.h"
 #include "UI/FGUserWidget.h"
 #include "FGAbstractServerWidget.h"
+#include "PassengerCrosshair.h"
 
 DEFINE_LOG_CATEGORY(LogTsabsPassengerWagon);
 
@@ -16,6 +17,11 @@ public:
         UE_LOG(LogTsabsPassengerWagon, Display, TEXT("TSABS_STARTUP_PREREQUISITE %s"),
             *GetPathNameSafe(ServerWidgetClass));
         UE_LOG(LogTsabsPassengerWagon, Display, TEXT("Tsabs passenger prototype module loaded; game validation is still pending."));
+        TsabsPassenger::InstallPassengerCrosshairHook();
+    }
+    virtual void ShutdownModule() override
+    {
+        TsabsPassenger::UninstallPassengerCrosshairHook();
     }
 };
 

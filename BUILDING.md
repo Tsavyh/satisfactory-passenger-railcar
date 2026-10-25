@@ -4,7 +4,7 @@
 
 This repository is the **plugin**, not a complete Satisfactory SDK checkout. Its internal name stays `TsabsPassengerWagon`.
 
-## Verified toolchain for0.1.10
+## Verified toolchain for 0.1.13
 
 | Component | Pinned environment |
 | :--- | :--- |
@@ -61,38 +61,18 @@ of the Unreal plugin.
 
 ## Unreal automation
 
-From the Starter Project root:
-
 ```bat
 "%UE_ROOT%\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" "%CD%\FactoryGame.uproject" -unattended -NullRHI -NoSound -nosplash -ExecCmds="Automation RunTests Tsabs.Passenger" -TestExit="Automation Test Queue Empty" -ReportExportPath="%CD%\Saved\PassengerTestReport"
 ```
 
-Inspect the exported report, not only the process exit code. The 0.1.8 code passed 27 cases: 24 without warnings plus 3 with SDK/UI warnings, no failures or skipped cases. Starter Project native stubs do not prove actual in-game behavior or replication.
+## 0.1.13 verification and inherited coverage
 
-The package also passed checks for the retained FactoryDedicatedClient DLL import. A real Windows DX11 startup reached the menu with zero streaming errors. The published 0.1.8 binary also passed a [Proton menu-startup check](docs/PROTON-STARTUP.md) on the affected Linux client; subsequent multiplayer acceptance was separately reported by two testers. The new 0.1.9 notice still needs an in-game remote-client check. No private logs are published.
+39 editor cases passed: **36 without warnings and 3 with SDK warnings**, with **134 warning entries**, zero failures and zero not-run cases. Seven package acceptance checks passed. Editor build and Shipping/cook both exited 0; a real Windows DX11 menu startup loaded the native prerequisite with zero streaming errors. This preparation reruns only standalone checks from the exported tree: **26 `/fp:precise` + 26 `/fp:fast` with MSVC 14.38**, and **2 Python native prerequisite contracts**. No new GCC/Clang, Linux-host Unreal build, Proton or hosted-CI result is claimed.
 
-## 0.1.9 local verification
+The source includes local crosshair forwarding/suppression, native speed-panel composition, retained-widget reconstruction/ownership checks, menu CDO category/order checks and the inherited post-0.1.10 lifecycle regressions. Those regressions cover scoped reservation cleanup after synchronous UObject invalidation, engine destruction of an initialized empty fixture car, a destroyed anchor failing closed, idempotent restoration hooks, UMG parent removal and fresh-HUD reentry.
 
-The 27 editor cases (24 without warnings plus3 SDK/UI-warning cases),7 package checks, MSVC policy checks in both modes and a real Windows DX11 menu startup passed. The transient notice fixture covers idle cruising, rejected-attempt feedback,3-second expiry/retrigger and clearing when slowing. RPC flags are checked, not actual network delivery. GCC/Clang and Proton results in PR#1 are attributed to its contributor; no hosted CI was configured for that PR.
+Direct fixture hooks or `NativeTick` calls are not complete Slate reconstruction, native gameplay possession, RPC delivery or rendered-menu proof. Human acceptance is separate: 0.1.11 HUD functionality, 0.1.12 minimal-panel appearance and 0.1.13 Transport/Railway placement were accepted in singleplayer. No real death/disconnection, save serialization, human-driver/autopilot travel or new remote-client lifecycle acceptance is implied.
 
-## 0.1.10 verification
+Historical two-player user approval and the contributor's scoped Proton startup report belong to 0.1.8. The changed 0.1.10 exit hint and 0.1.11–0.1.13 passenger UI still need a grouped remote-client check. Both host and clients must use the same version. Contributor commands above are retained, not newly certified on other compilers. No workflow is added by this export.
 
-27 editor cases passed (24 without warnings, 3 with SDK/UI warnings), seven package checks and real Windows DX11 menu startup passed. The tester accepted the three hint/feedback checks in singleplayer: hidden above 30 after a sustained interval, restored below 30, and brief rejected-exit warning without dismount. The fixture also covers strict float boundaries, reverse and non-finite speeds. Remote-client verification of this UI is still pending; do not infer replication from direct NativeTick tests. No new GCC/Clang/Proton run is claimed for this release.
-
-## Development regression coverage (tests only)
-
-The post-0.1.10 development tree passes 31 editor tests: 28 without warnings
-and 3 with existing SDK/UI warnings, with no failures or skipped cases. Four
-new cases cover scoped reservation cleanup after synchronous UObject
-invalidation, engine destruction of an initialized empty fixture car, a
-destroyed anchor reference failing closed, and repeated restoration hooks
-without duplicate pilots. The existing effective-key fixture also checks
-real UMG parent removal, unrelated UI preservation and a fresh HUD on reentry.
-
-These checks do not simulate a real death/disconnection, serialize a saved
-game, run the game's native possession pipeline, or deliver network RPCs.
-An EditorPreview actor must be initialized before testing engine EndPlay
-routing; correcting that fixture prerequisite was not a runtime bug fix.
-Runtime code, the descriptor and published binary remain unchanged. For the
-exact source of the published binary use tag `v0.1.10`, not the development
-branch. No new release, cook, Proton or remote-client result is implied.
+[`SOURCE-MANIFEST.json`](SOURCE-MANIFEST.json) records all 58 exact reviewed plugin inputs and the reduced public binary checksum. Public wrappers, MIT/third-party boundaries, PR #1 credit and current main history are preserved. This is source correspondence, not a bit-reproducible build claim. Keep private diagnostics outside the repository.

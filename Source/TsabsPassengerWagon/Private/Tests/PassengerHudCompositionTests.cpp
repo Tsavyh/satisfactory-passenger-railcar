@@ -45,10 +45,13 @@ bool FTsabsPassengerHudCompositionTest::RunTest(const FString& Parameters)
     TestTrue(TEXT("Presentation is tied to this exact passenger pawn"), HUD->GetPassengerAnchor() == Anchor);
     UCanvasPanel* Root = HUD->WidgetTree ? Cast<UCanvasPanel>(HUD->WidgetTree->RootWidget) : nullptr;
     if (!TestNotNull(TEXT("Native initialization builds an actual canvas, not only hint data"), Root)) return false;
-    TestEqual(TEXT("Only one passive interaction prompt"), Root->GetChildrenCount(), 1);
     UClass* Stock = LoadClass<UUserWidget>(nullptr,
         TEXT("/Game/FactoryGame/Interface/UI/InGame/Widget_PlayerInteraction.Widget_PlayerInteraction_C"));
-    UWidget* Prompt = Root->GetChildrenCount() ? Root->GetChildAt(0) : nullptr;
+    UWidget* Prompt = nullptr;
+    int32 PromptCount = 0;
+    for (UWidget* Child : Root->GetAllChildren())
+        if (Stock && Child->IsA(Stock)) { Prompt = Child; ++PromptCount; }
+    TestEqual(TEXT("Only one passive interaction prompt (speed visuals are not prompts)"), PromptCount, 1);
     TestTrue(TEXT("Child reuses the normal E-interaction widget, not a control bar"),
         Prompt && Stock && Prompt->IsA(Stock));
     TestFalse(TEXT("HUD cannot steal keyboard focus"), HUD->IsFocusable());
