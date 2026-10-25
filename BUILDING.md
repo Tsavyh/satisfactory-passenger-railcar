@@ -78,3 +78,21 @@ The 27 editor cases (24 without warnings plus3 SDK/UI-warning cases),7 package c
 ## 0.1.10 verification
 
 27 editor cases passed (24 without warnings, 3 with SDK/UI warnings), seven package checks and real Windows DX11 menu startup passed. The tester accepted the three hint/feedback checks in singleplayer: hidden above 30 after a sustained interval, restored below 30, and brief rejected-exit warning without dismount. The fixture also covers strict float boundaries, reverse and non-finite speeds. Remote-client verification of this UI is still pending; do not infer replication from direct NativeTick tests. No new GCC/Clang/Proton run is claimed for this release.
+
+## Development regression coverage (tests only)
+
+The post-0.1.10 development tree passes 31 editor tests: 28 without warnings
+and 3 with existing SDK/UI warnings, with no failures or skipped cases. Four
+new cases cover scoped reservation cleanup after synchronous UObject
+invalidation, engine destruction of an initialized empty fixture car, a
+destroyed anchor reference failing closed, and repeated restoration hooks
+without duplicate pilots. The existing effective-key fixture also checks
+real UMG parent removal, unrelated UI preservation and a fresh HUD on reentry.
+
+These checks do not simulate a real death/disconnection, serialize a saved
+game, run the game's native possession pipeline, or deliver network RPCs.
+An EditorPreview actor must be initialized before testing engine EndPlay
+routing; correcting that fixture prerequisite was not a runtime bug fix.
+Runtime code, the descriptor and published binary remain unchanged. For the
+exact source of the published binary use tag `v0.1.10`, not the development
+branch. No new release, cook, Proton or remote-client result is implied.

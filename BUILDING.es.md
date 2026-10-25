@@ -70,3 +70,21 @@ También se verificaron el cook/ZIP y la presencia del import real de la DLL Fac
 ## Verificación 0.1.10
 
 27 casos editor correctos (24 sin avisos, 3 con avisosSDK/UI), siete comprobaciones del paquete y arranqueWindows DX11 al menú correctos. El probador aceptó los tres puntos en singleplayer: ocultar rápido tras un intervalo, reaparecer lento y aviso breve de rechazo sin bajar. La fixture cubre también fronterafloat estricta, reversa y valores no finitos. Falta comprobar esta UI en cliente remoto; llamar NativeTick directamente no verifica replicación. No se atribuyen nuevas pruebas GCC/Clang/Proton a esta entrega.
+
+## Cobertura de desarrollo (solo pruebas)
+
+El árbol de desarrollo posterior a 0.1.10 supera 31 pruebas editor: 28 sin
+avisos y 3 con los avisos SDK/UI existentes; cero fallos/no ejecutadas. Cuatro
+casos nuevos cubren liberación de una reserva tras invalidar un UObject en
+un callback síncrono, destrucción real por el motor de un vagón vacío de
+fixture inicializado, bloqueo seguro ante un anclaje destruido e idempotencia
+del callback de restauración sin duplicar anclajes. La fixture de tecla
+existente también verifica retirada de un padre UMG real, conservación de
+UI ajena y un HUD nuevo al volver a entrar.
+
+No simulan muerte/desconexión reales, serialización de guardados, la posesión
+nativa del juego ni entrega RPC. Inicializar el actor EditorPreview antes de
+probar la ruta EndPlay fue una corrección de fixture, no un bug del runtime.
+Código funcional, descriptor y binario publicado permanecen intactos. Las
+fuentes exactas del binario están en `v0.1.10`, no en la rama de desarrollo.
+Esto no crea una versión nueva ni acredita otro cook, Proton o cliente remoto.

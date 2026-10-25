@@ -13,6 +13,7 @@
 #include "TsabsPassengerHUD.h"
 #include "TsabsPassengerRailcar.h"
 #include "FGRailroadVehicleMovementComponent.h"
+#include "Components/CanvasPanel.h"
 #include <bit>
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTsabsResolvedExitKeyTest,
@@ -108,6 +109,45 @@ bool FTsabsResolvedExitKeyTest::RunTest(const FString& Parameters)
     }
     Mappings.Reset();
     TestTrue(TEXT("No binding never invents E or a generic X"), HUD->ResolveLeaveKey().IsEmpty());
+
+    // Real UMG parent removal with a generic engine controller. SetPawn is a
+    // fixture transition, NOT a claim to exercise Satisfactory possession/RPCs.
+    UCanvasPanel* Host = NewObject<UCanvasPanel>(PC);
+    UCanvasPanel* Unrelated = NewObject<UCanvasPanel>(PC);
+    Host->AddChild(HUD);
+    Host->AddChild(Unrelated);
+    TestTrue(TEXT("Old passenger HUD is actually attached before the transition"), HUD->GetParent() == Host);
+    Car->GetRailroadVehicleMovementComponent()->SetForwardSpeed(900.0f);
+    HUD->NotifyExitSpeedRejected();
+    const FText BeforePawnChange = HUD->LastPrompt;
+    PC->SetPawn(nullptr);
+    HUD->NativeTick(FGeometry(), 0.01f);
+    TestNull(TEXT("Loss of owning pawn removes the old HUD from its real parent"), HUD->GetParent());
+    TestTrue(TEXT("HUD removal preserves unrelated UI"), Unrelated->GetParent() == Host);
+    HUD->NotifyExitSpeedRejected();
+    TestTrue(TEXT("Delayed feedback cannot mutate a HUD after pawn loss"), HUD->LastPrompt.EqualTo(BeforePawnChange));
+
+    ATsabsPassengerAnchor* NextAnchor = World->SpawnActor<ATsabsPassengerAnchor>();
+    if (!TestNotNull(TEXT("Next passenger fixture anchor"), NextAnchor)) return false;
+    ATsabsPassengerRailcar* NextCar = World->SpawnActor<ATsabsPassengerRailcar>();
+    if (!TestNotNull(TEXT("Next passenger fixture car"), NextCar) ||
+        !TestTrue(TEXT("Next fixture attachment"), NextAnchor->InitializePassengerAnchor(NextCar, FTransform::Identity))) return false;
+    NextCar->GetRailroadVehicleMovementComponent()->SetForwardSpeed(900.0f);
+    PC->SetPawn(NextAnchor);
+    UTsabsPassengerHUD* NextHUD = CreateWidget<UTsabsPassengerHUD>(PC, UTsabsPassengerHUD::StaticClass());
+    if (!TestNotNull(TEXT("Reentry creates a fresh HUD instance"), NextHUD)) return false;
+    TestTrue(TEXT("Fresh HUD is tied only to the new passenger"), NextHUD->GetPassengerAnchor() == NextAnchor);
+    TestTrue(TEXT("Fresh fast-travel HUD has no stale rejected-exit warning"), NextHUD->LastPrompt.IsEmpty());
+    TestEqual(TEXT("Fresh HUD starts with no warning countdown"), NextHUD->ExitSpeedWarningSecondsRemaining, 0.0f);
+    Host->AddChild(NextHUD);
+    Host->AddChild(HUD);
+    HUD->NativeTick(FGeometry(), 0.01f);
+    TestNull(TEXT("Stale HUD removes itself when a different anchor owns the controller"), HUD->GetParent());
+    TestTrue(TEXT("Stale HUD cannot remove the replacement HUD"), NextHUD->GetParent() == Host);
+    TestTrue(TEXT("Unrelated UI survives replacement"), Unrelated->GetParent() == Host);
+    PC->SetPawn(nullptr);
+    NextHUD->NativeTick(FGeometry(), 0.01f);
+    TestNull(TEXT("Replacement HUD also detaches on pawn loss"), NextHUD->GetParent());
     return true;
 }
 #endif
