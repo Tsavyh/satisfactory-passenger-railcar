@@ -4,7 +4,7 @@
 
 This repository is the **plugin**, not a complete Satisfactory SDK checkout. Its internal name stays `TsabsPassengerWagon`.
 
-## Verified toolchain for 0.1.8
+## Verified toolchain for0.1.10
 
 | Component | Pinned environment |
 | :--- | :--- |
@@ -74,3 +74,7 @@ The package also passed checks for the retained FactoryDedicatedClient DLL impor
 ## 0.1.9 local verification
 
 The 27 editor cases (24 without warnings plus3 SDK/UI-warning cases),7 package checks, MSVC policy checks in both modes and a real Windows DX11 menu startup passed. The transient notice fixture covers idle cruising, rejected-attempt feedback,3-second expiry/retrigger and clearing when slowing. RPC flags are checked, not actual network delivery. GCC/Clang and Proton results in PR#1 are attributed to its contributor; no hosted CI was configured for that PR.
+
+## 0.1.10 verification
+
+27 editor cases passed (24 without warnings, 3 with SDK/UI warnings), seven package checks and real Windows DX11 menu startup passed. The tester accepted the three hint/feedback checks in singleplayer: hidden above 30 after a sustained interval, restored below 30, and brief rejected-exit warning without dismount. The fixture also covers strict float boundaries, reverse and non-finite speeds. Remote-client verification of this UI is still pending; do not infer replication from direct NativeTick tests. No new GCC/Clang/Proton run is claimed for this release.

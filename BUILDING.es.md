@@ -2,7 +2,7 @@
 
 ## Entorno probado
 
-- Satisfactory Steam1.2.4.1, CL513885; SML3.12.0.
+- Satisfactory Steam 1.2.4.1, CL513885; SML 3.12.0.
 - Starter Project de satisfactorymodding/SatisfactoryModLoader en el commit8eebc9e659f0b2ff4392d2f8cf6e2cff60c8ea49.
 - Unreal Engine5.6.1-css-83 de Coffee Stain.
 - Visual Studio2022, MSVC14.38 (v14.38-17.8), Windows SDK10.0.26100.0.
@@ -33,7 +33,7 @@ call Tests\run-policy-tests.cmd
 python Tests\test_native_prerequisite.py
 ```
 
-El primer script compila y ejecuta26 casos en `/fp:precise` y en `/fp:fast`, incluidos frontera30, reversa, NaN e infinitos. El segundo verifica la dependencia explícita y la referencia a la clase nativa que conserva el import de la DLL. No requieren SDK para esas dos comprobaciones.
+El primer script compila y ejecuta26 casos en `/fp:precise` y en `/fp:fast`, incluidos frontera 30, reversa, NaN e infinitos. El segundo verifica la dependencia explícita y la referencia a la clase nativa que conserva el import de la DLL. No requieren SDK para esas dos comprobaciones.
 
 En Linux, con Bash y un compilador GCC/Clang con C++20:
 
@@ -66,3 +66,7 @@ También se verificaron el cook/ZIP y la presencia del import real de la DLL Fac
 ## Verificación local 0.1.9
 
 27 casos del editor correctos(24 sin avisos+3 SDK/UI),7 checks de paquete, política MSVC en2modos y arranque real Windows DX11 al menú. La fixture comprueba crucero sin aviso, evento de rechazo, duración3s/reinicio y limpieza al reducir velocidad. Las flags RPC no demuestran entrega de red real. Los resultados GCC/Clang/Proton de PR#1 son del autor; no se configuró CI para esa PR.
+
+## Verificación 0.1.10
+
+27 casos editor correctos (24 sin avisos, 3 con avisosSDK/UI), siete comprobaciones del paquete y arranqueWindows DX11 al menú correctos. El probador aceptó los tres puntos en singleplayer: ocultar rápido tras un intervalo, reaparecer lento y aviso breve de rechazo sin bajar. La fixture cubre también fronterafloat estricta, reversa y valores no finitos. Falta comprobar esta UI en cliente remoto; llamar NativeTick directamente no verifica replicación. No se atribuyen nuevas pruebas GCC/Clang/Proton a esta entrega.

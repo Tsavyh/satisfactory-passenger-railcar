@@ -176,9 +176,14 @@ void UTsabsPassengerHUD::RefreshExitHint(bool bForce)
 {
     ATsabsPassengerAnchor* Anchor = PassengerAnchor.Get();
     if (!IsValid(Anchor) || !IsValid(InteractionWidget)) return;
-    // Availability is enforced by the server; merely cruising is not an exit attempt.
-    if (Anchor->IsWithinPassengerAccessSpeedLimit()) ExitSpeedWarningSecondsRemaining = 0.0f;
-    const FText Prompt = FormatExitPrompt(ResolveLeaveKey(), ExitSpeedWarningSecondsRemaining <= 0.0f);
+    // Only advertise Leave while the strict speed policy allows it. Keep this
+    // parent HUD ticking: collapsing the whole HUD could prevent reappearance.
+    const bool bWithinSpeedLimit = Anchor->IsWithinPassengerAccessSpeedLimit();
+    if (bWithinSpeedLimit) ExitSpeedWarningSecondsRemaining = 0.0f;
+    const bool bShowRejection = ExitSpeedWarningSecondsRemaining > 0.0f;
+    const bool bShowPrompt = bWithinSpeedLimit || bShowRejection;
+    InteractionWidget->SetVisibility(bShowPrompt ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+    const FText Prompt = bShowPrompt ? FormatExitPrompt(ResolveLeaveKey(), !bShowRejection) : FText::GetEmpty();
     if (!bForce && bHasPrompt && LastPrompt.EqualTo(Prompt)) return;
     if (ApplyInteractionText(Prompt))
     {

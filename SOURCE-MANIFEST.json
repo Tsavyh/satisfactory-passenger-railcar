@@ -1,13 +1,13 @@
 {
-  "version": "0.1.9",
+  "version": "0.1.10",
   "license_own_code": "MIT",
   "tested_plugin_source_files": 49,
   "files": {
-    "TsabsPassengerWagon.uplugin": "5ba7b9cdb64baf2347a95aa2d54a90ce4078285da6ef3cff181386440b3c4242",
+    "TsabsPassengerWagon.uplugin": "d6b9d6166a1245ec1ae806447f708acc9da32a3b084f93a441cf31a116a3ed3e",
     "Source/TsabsPassengerWagon/TsabsPassengerWagon.Build.cs": "226d698b15d5c03e4cfb357eceec12a38b33d25e1838448c1875f8c33372fbc8",
     "Source/TsabsPassengerWagon/Private/TsabsPassengerAnchor.cpp": "35e12a841fddc4fb2bc04132b2d111c97429d699cb0a6abddf1efd037ced8ff4",
     "Source/TsabsPassengerWagon/Private/TsabsPassengerDescriptor.cpp": "9ec77c7e282c05440e0d7cf0af76c19f92ba2269fc96768385a82b8c05dca91b",
-    "Source/TsabsPassengerWagon/Private/TsabsPassengerHUD.cpp": "e71351badf07225b4886e2ee98b8216be49e4a96b23c13355df9d0162718fb25",
+    "Source/TsabsPassengerWagon/Private/TsabsPassengerHUD.cpp": "089fe227f408c3f2dc7fb481a8ab951d5618787017b22d92c76ac4cdd3e0a884",
     "Source/TsabsPassengerWagon/Private/TsabsPassengerRailcar.cpp": "e69e296eee1780a8bdae22892ddf91721a89d07025e4ad4494bdb10b94aa8ff4",
     "Source/TsabsPassengerWagon/Private/TsabsPassengerRailMovement.cpp": "a9361349320f05a554106602e030b6c06f67128d3665aa77bfe25802b6e42386",
     "Source/TsabsPassengerWagon/Private/TsabsPassengerRecipe.cpp": "555e77191f00f9f10d3b281eda9d48ed821ec52077d5d2727f90de73468877cd",
@@ -46,7 +46,7 @@
     "Source/TsabsPassengerWagon/Private/Tests/PassengerNativeCameraFramingTests.cpp": "5d6a03b14217677491c7c1fe365db40d2ed32d288865c010da6102f8677e2c1e",
     "Source/TsabsPassengerWagon/Private/Tests/PassengerRailcarTests.cpp": "dade952dad87b42837011f29001d0afc47848b46d98e764dd840336ad2f51f8a",
     "Source/TsabsPassengerWagon/Private/Tests/PassengerRecipeTests.cpp": "9697e352f77e854c33cc20b85a306722858f6cc255ce12e71858a36106a305fb",
-    "Source/TsabsPassengerWagon/Private/Tests/PassengerResolvedExitKeyTests.cpp": "8eed245ca341da740cc6de973673f743279bc454f266ea474fe9bcfa17a0c9f4",
+    "Source/TsabsPassengerWagon/Private/Tests/PassengerResolvedExitKeyTests.cpp": "edcab89959ad7c9af152bdf9524fb3da3b96f6223eeb11aed9c46d630f02c73e",
     "Source/TsabsPassengerWagon/Private/Tests/PassengerStandardExitPresentationTests.cpp": "b7902981ad4f8b8470dcbfb3216d84aec6ab72854ea650132b2217a10ab64170",
     "Source/TsabsPassengerWagon/Private/Tests/PassengerWorldModuleTests.cpp": "fa669d690d5f22eb8f4f3039e50578355952dbf04b0932849ea4332d67a03b5d",
     "Tests/run-policy-tests.sh": "103638abd645b08fe5b82d2ec2453152e32c5bf1c9e0edc48b7c39820ede83cd",
@@ -54,13 +54,10 @@
     "Tests/test_policy_runner.py": "0f1d67f7e037325534b44e44f0779d31d3a2e23f0d0e2b3215d9ed6de1333be4"
   },
   "public_binary": {
-    "asset": "satisfactory-passenger-railcar-0.1.9-windows-steam.zip",
-    "sha256": "06a0030d30ae31315d962f8b7bed3a6b9c03ba7aa816ed0d1fcdc1552a0cdbf8"
+    "asset": "satisfactory-passenger-railcar-0.1.10-windows-steam.zip",
+    "sha256": "de84b8ae190ea950f56562f9ca09647572ddc3096129de5e2c8668564b044a51"
   },
-  "PR1": {
-    "author": "MikelCalvo",
-    "head_sha": "3b20c767d6579a776009e1fcdd0d4f7a3347b141",
-    "merge_sha": "d8a8cf7651fdc7c2cb82a61e09361143aea444ab"
-  },
+  "runtime0110_hint_singleplayer_user_report_accepted": true,
+  "runtime0110_hint_multiplayer_tested": false,
   "scope": "Own plugin source/tests only, SDK/Engine/game assets excluded"
 }

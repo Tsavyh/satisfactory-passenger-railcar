@@ -13,6 +13,7 @@
 #include "TsabsPassengerHUD.h"
 #include "TsabsPassengerRailcar.h"
 #include "FGRailroadVehicleMovementComponent.h"
+#include <bit>
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTsabsResolvedExitKeyTest,
     "Tsabs.Passenger.Interface.ExitReadsEffectiveLeaveBindingNotGenericIcon",
@@ -52,8 +53,8 @@ bool FTsabsResolvedExitKeyTest::RunTest(const FString& Parameters)
     if (!TestTrue(TEXT("Prompt fixture owns an attached railcar"), Anchor->InitializePassengerAnchor(Car, FTransform::Identity))) return false;
     Car->GetRailroadVehicleMovementComponent()->SetForwardSpeed(900.0f);
     HUD->RefreshExitHint(true);
-    TestTrue(TEXT("Cruising above30 without an exit attempt keeps the normal mapped-key hint, not a persistent restriction"),
-        HUD->LastPrompt.EqualTo(UTsabsPassengerHUD::FormatExitPrompt(FText::FromString(TEXT("E")), true)));
+    TestTrue(TEXT("Cruising at-or-above30 hides the Leave-key hint and any idle restriction"), HUD->LastPrompt.IsEmpty());
+    TestEqual(TEXT("Hidden text also collapses only the owned interaction widget"), HUD->InteractionWidget->GetVisibility(), ESlateVisibility::Collapsed);
     UFunction* Rejection = HUD->FindFunction(TEXT("NotifyExitSpeedRejected"));
     if (!TestNotNull(TEXT("A rejected exit attempt can notify the local passenger HUD"), Rejection)) return false;
     HUD->ProcessEvent(Rejection, nullptr);
@@ -62,8 +63,8 @@ bool FTsabsResolvedExitKeyTest::RunTest(const FString& Parameters)
     HUD->NativeTick(FGeometry(), 2.0f);
     TestTrue(TEXT("Rejection remains visible briefly"), HUD->LastPrompt.ToString().Contains(TEXT("30")));
     HUD->NativeTick(FGeometry(), 1.0f);
-    TestTrue(TEXT("After three seconds the normal mapped-key hint returns even if still fast"),
-        HUD->LastPrompt.EqualTo(UTsabsPassengerHUD::FormatExitPrompt(FText::FromString(TEXT("E")), true)));
+    TestTrue(TEXT("After three seconds the rejection clears without advertising Leave while still fast"), HUD->LastPrompt.IsEmpty());
+    TestEqual(TEXT("The rejected-attempt warning expires back to hidden"), HUD->InteractionWidget->GetVisibility(), ESlateVisibility::Collapsed);
     HUD->NativeTick(FGeometry(), 10.0f);
     TestFalse(TEXT("Continued fast travel cannot retrigger a rejected-attempt warning"), HUD->LastPrompt.ToString().Contains(TEXT("km/h")));
     HUD->ProcessEvent(Rejection, nullptr);
@@ -74,11 +75,31 @@ bool FTsabsResolvedExitKeyTest::RunTest(const FString& Parameters)
     Car->GetRailroadVehicleMovementComponent()->SetForwardSpeed(0.0f);
     HUD->NativeTick(FGeometry(), 0.01f);
     TestFalse(TEXT("Slowing below30 clears a stale rejection immediately"), HUD->LastPrompt.ToString().Contains(TEXT("km/h")));
+    TestTrue(TEXT("Slowing below30 restores the effective Leave-key instruction"),
+        HUD->LastPrompt.EqualTo(UTsabsPassengerHUD::FormatExitPrompt(FText::FromString(TEXT("E")), true)));
+    TestEqual(TEXT("The passive interaction becomes visible again when allowed"), HUD->InteractionWidget->GetVisibility(), ESlateVisibility::HitTestInvisible);
     HUD->ProcessEvent(Rejection, nullptr);
     TestFalse(TEXT("A late server rejection cannot show the speed warning after slowing"), HUD->LastPrompt.ToString().Contains(TEXT("km/h")));
     Car->GetRailroadVehicleMovementComponent()->SetForwardSpeed(900.0f);
     HUD->NativeTick(FGeometry(), 0.01f);
     TestFalse(TEXT("Accelerating again is not a new exit attempt"), HUD->LastPrompt.ToString().Contains(TEXT("km/h")));
+    TestTrue(TEXT("Accelerating again hides the ordinary Leave instruction"), HUD->LastPrompt.IsEmpty());
+    struct FVisibleCase { uint32 Bits; bool bVisible; };
+    const FVisibleCase VisibilityCases[] = {
+        {0x00000000u, true}, {0x44505555u, true}, {0x44505556u, false},
+        {0xc4505555u, true}, {0xc4505556u, false}, {0x7fc00000u, false},
+        {0x7f800000u, false}, {0xff800000u, false}};
+    for (const FVisibleCase& Case : VisibilityCases)
+    {
+        Car->GetRailroadVehicleMovementComponent()->SetForwardSpeed(std::bit_cast<float>(Case.Bits));
+        HUD->NativeTick(FGeometry(), 0.01f);
+        TestEqual(FString::Printf(TEXT("Leave hint visibility follows strict signed access policy: %08x"), Case.Bits),
+            !HUD->LastPrompt.IsEmpty(), Case.bVisible);
+        TestEqual(TEXT("Widget visibility matches the instruction without collapsing the ticking HUD"),
+            HUD->InteractionWidget->GetVisibility(), Case.bVisible ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+        TestEqual(TEXT("The parent HUD remains ticking/visible even when its prompt is hidden"),
+            HUD->GetVisibility(), ESlateVisibility::HitTestInvisible);
+    }
     UFunction* ClientFeedback = Anchor->FindFunction(TEXT("Client_NotifyExitSpeedRejected"));
     if (TestNotNull(TEXT("Remote server rejection has an owning-client feedback route"), ClientFeedback))
     {
