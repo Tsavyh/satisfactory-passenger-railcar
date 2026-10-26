@@ -32,6 +32,19 @@ call "%UE_ROOT%\Engine\Build\BatchFiles\RunUAT.bat" -ScriptsForProject="%CD%\Fac
 
 These targets and packaging arguments were exercised for the published build, with local paths substituted. Inspect `Saved/ArchivedPlugins/TsabsPassengerWagon` before installation. Leave automatic deployment disabled. Different paths/toolchains may not produce byte-identical binaries.
 
+## Offline release ZIP verification
+
+With Python 3.12 (also exercised on Windows with Python 3.14.7), check a Windows
+Steam public wrapper without extracting, installing or executing it:
+
+```sh
+python -B tools/verify_release.py satisfactory-passenger-railcar-0.1.13-windows-steam.zip --expected-version 0.1.13
+```
+
+See [release verification](docs/RELEASE-VERIFICATION.md) for the optional external
+SHA-256, exact accepted layout, tests and limits. A pass is package verification,
+not game-load, compatibility, malware or private-data certification.
+
 ## Standalone checks
 
 In an x64 MSVC Native Tools CMD, from the plugin root:
