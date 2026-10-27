@@ -3,6 +3,7 @@
 #include "UI/FGUserWidget.h"
 #include "FGAbstractServerWidget.h"
 #include "PassengerCrosshair.h"
+#include "TsabsPassengerWorldModule.h"
 
 DEFINE_LOG_CATEGORY(LogTsabsPassengerWagon);
 
@@ -18,9 +19,14 @@ public:
             *GetPathNameSafe(ServerWidgetClass));
         UE_LOG(LogTsabsPassengerWagon, Display, TEXT("Tsabs passenger prototype module loaded; game validation is still pending."));
         TsabsPassenger::InstallPassengerCrosshairHook();
+        UTsabsPassengerWorldModule::InstallAvailabilityHooks();
     }
+    // Native SML dispatch does not permit removing its active handler arrays.
+    // Only ordinary shutdown after the engine loop is supported, not hot unload.
+    virtual bool SupportsDynamicReloading() override { return false; }
     virtual void ShutdownModule() override
     {
+        UTsabsPassengerWorldModule::ShutdownAvailabilityHooks();
         TsabsPassenger::UninstallPassengerCrosshairHook();
     }
 };

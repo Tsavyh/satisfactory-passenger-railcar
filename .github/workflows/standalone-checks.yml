@@ -2,6 +2,7 @@ name: Standalone checks
 
 on:
   push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -66,5 +67,28 @@ jobs:
           call "%VS_INSTALL%\VC\Auxiliary\Build\vcvars64.bat"
           if errorlevel 1 exit /b 1
           call Tests\run-policy-tests.cmd
+          if errorlevel 1 exit /b 1
+          python -B tools/run_routing_checks.py --output "%RUNNER_TEMP%/passenger-routing"
       - name: Native prerequisite contracts
         run: python -B -m unittest discover -s Tests -p test_native_prerequisite.py -v
+      - name: Source snapshot and routing-runner contracts
+        shell: python {0}
+        run: |
+          import subprocess
+          import sys
+          for pattern in ("test_source_manifest.py", "test_routing_ci.py"):
+              subprocess.run([sys.executable, "-B", "-m", "unittest", "discover", "-s", "Tests", "-p", pattern, "-v"], check=True, timeout=120)
+      - name: Routing result and failure logs
+        if: always()
+        shell: python {0}
+        run: |
+          import json
+          import os
+          from pathlib import Path
+          output = Path(os.environ["RUNNER_TEMP"]) / "passenger-routing"
+          if (output / "result.json").is_file():
+              report = json.loads((output / "result.json").read_text())
+              print(json.dumps(report, indent=2))
+              if report["status"] != "PASS":
+                  for path in sorted(output.glob("*.log")):
+                      print(path.name, path.read_text(encoding="utf-8", errors="replace")[-24000:])

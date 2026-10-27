@@ -1,0 +1,175 @@
+// ROUTING-ONLY boundaries. None implement game physics, RCO, network or native success.
+#include <iostream>
+#include <string>
+#include <utility>
+struct FText {
+    std::string Value;
+    static FText GetEmpty() { return {""}; }
+    static FText AsNumber(double) { return {"300"}; }
+    static FText Format(FText Pattern, FText Argument) { return {Pattern.Value + "|" + Argument.Value}; }
+};
+#define NSLOCTEXT(Namespace, Key, Text) FText{Text}
+struct FVector { double X, Y, Z; };
+struct UPrimitiveComponent { int Identity; };
+struct AFGPlayerController {
+    bool Local = false;
+    FText GetKeyNameForUseAction() const { return {"Rebound-Use"}; }
+};
+struct AFGCharacterPlayer {
+    AFGPlayerController* Controller = nullptr;
+    AFGPlayerController* GetController() const { return Controller; }
+};
+template<class T> bool IsValid(T* Object) { return Object != nullptr; }
+template<class T, class U> T* Cast(U* Object) { return static_cast<T*>(Object); }
+struct UFGUseState_Valid { static int StaticClass() { return 101; } };
+struct UTsabsPassengerUseState_Blocked { static int StaticClass() { return 102; } };
+struct FUseState {
+    int StateClass = 0;
+    bool bIsTraceHit = false;
+    UPrimitiveComponent* UseComponent = nullptr;
+    FVector UseLocation{};
+    int SetCalls = 0;
+    void SetUseState(int Class) { StateClass = Class; ++SetCalls; }
+};
+namespace TsabsPassenger { constexpr double PassengerAccessSpeedLimitKmh = 300; }
+enum class ETsabsBoardingFeedback { InvalidCharacter, Moving, Unavailable, Busy, OutOfReach, ExitBlocked, Ready };
+enum Role { Authority, AutonomousProxy, SimulatedProxy };
+struct NativeRailroadBoundary {
+    // TEST DOUBLES ONLY: count entry and exact forwarding, mark unique outputs,
+    // optionally clear the flag to prove caller terminates. NO native rerail/RPC.
+    mutable bool Derailed = false;
+    mutable bool FlipDerailed = false;
+    mutable int NativeUse = 0, NativeUpdate = 0, NativeDescription = 0;
+    mutable AFGCharacterPlayer* SeenCharacter = nullptr;
+    mutable const FUseState* SeenState = nullptr;
+    mutable const FVector* SeenLocation = nullptr;
+    mutable UPrimitiveComponent* SeenComponent = nullptr;
+    mutable FUseState* SeenOut = nullptr;
+    bool IsDerailed() const { return Derailed; }
+    void OnUse_Implementation(AFGCharacterPlayer* Character, const FUseState& State) {
+        ++NativeUse; SeenCharacter = Character; SeenState = &State;
+        if (FlipDerailed) Derailed = false;
+    }
+    void UpdateUseState_Implementation(AFGCharacterPlayer* Character, const FVector& AtLocation,
+        UPrimitiveComponent* ComponentHit, FUseState& OutState) {
+        ++NativeUpdate; SeenCharacter = Character; SeenLocation = &AtLocation;
+        SeenComponent = ComponentHit; SeenOut = &OutState;
+        OutState.SetUseState(701); OutState.UseComponent = ComponentHit;
+        OutState.bIsTraceHit = true; OutState.UseLocation = AtLocation;
+        if (FlipDerailed) Derailed = false;
+    }
+    FText GetLookAtDecription_Implementation(AFGCharacterPlayer* Character, const FUseState& State) const {
+        ++NativeDescription; SeenCharacter = Character; SeenState = &State;
+        if (FlipDerailed) Derailed = false;
+        return {"NATIVE-BOUNDARY-DESCRIPTION|rebound-use"};
+    }
+};
+struct ATsabsPassengerRailcar : NativeRailroadBoundary {
+    using Super = NativeRailroadBoundary;
+    Role CurrentRole = Authority;
+    ETsabsBoardingFeedback Feedback = ETsabsBoardingFeedback::Ready;
+    mutable int FeedbackCalls = 0;
+    int BoardAttempts = 0;
+    AFGCharacterPlayer* BoardCharacter = nullptr;
+    bool HasAuthority() const { return CurrentRole == Authority; }
+    bool TryBoardPilot(AFGCharacterPlayer* Character) { ++BoardAttempts; BoardCharacter = Character; return false; }
+    ETsabsBoardingFeedback GetBoardingFeedback(AFGCharacterPlayer*) const { ++FeedbackCalls; return Feedback; }
+    static FText FormatBoardingPrompt(const FText& Key) { return {"BOARD-PROMPT|" + Key.Value}; }
+    void OnUse_Implementation(AFGCharacterPlayer*, const FUseState&);
+    void UpdateUseState_Implementation(AFGCharacterPlayer*, const FVector&, UPrimitiveComponent*, FUseState&);
+    FText GetLookAtDecription_Implementation(AFGCharacterPlayer*, const FUseState&) const;
+};
+
+// BEGIN EXACT COMPLETE PRODUCTION DEFINITIONS (no body rewriting)
+@@PRODUCTION_DEFINITIONS@@
+// END EXACT COMPLETE PRODUCTION DEFINITIONS
+
+int Failures = 0, Cases = 0;
+std::string CurrentCase;
+void Check(bool Condition, const char* Message) {
+    if (!Condition) { ++Failures; std::cout << "ASSERT_FAIL " << CurrentCase << ": " << Message << '\n'; }
+}
+void Begin(std::string Name) { CurrentCase = std::move(Name); ++Cases; }
+void End(int Before) { std::cout << "CASE " << (Failures == Before ? "PASS " : "FAIL ") << CurrentCase << '\n'; }
+int main() {
+    AFGPlayerController PC;
+    AFGCharacterPlayer Character{&PC};
+    UPrimitiveComponent Component{37};
+    FVector Location{17.125, -990.25, 31.5};
+    for (Role R : {Authority, AutonomousProxy, SimulatedProxy}) {
+        for (bool Local : {false, true}) {
+            PC.Local = Local;
+            for (int Forgery : {0, 101, 701}) {
+                for (bool Flip : {false, true}) {
+                    FUseState Input; Input.StateClass = Forgery; Input.bIsTraceHit = (Forgery == 101);
+                    Input.UseComponent = &Component; Input.UseLocation = Location;
+                    std::string Suffix = "role=" + std::to_string(R) + "/local=" + std::to_string(Local)
+                        + "/forged=" + std::to_string(Forgery) + "/flip=" + std::to_string(Flip);
+                    int Before = Failures; Begin("derailed.OnUse/" + Suffix);
+                    ATsabsPassengerRailcar Use; Use.CurrentRole = R; Use.Derailed = true; Use.FlipDerailed = Flip;
+                    Use.OnUse_Implementation(&Character, Input);
+                    Check(Use.NativeUse == 1, "derailed OnUse must reach native railroad parent exactly once, including client/non-host");
+                    Check(Use.SeenCharacter == &Character && Use.SeenState == &Input, "forward original Character and State by identity");
+                    Check(Use.BoardAttempts == 0 && Use.FeedbackCalls == 0, "no boarding/fallback after native use, even when parent clears IsDerailed");
+                    Check(Use.NativeUpdate == 0 && Use.NativeDescription == 0, "no unrelated native calls"); End(Before);
+                    Before = Failures; Begin("derailed.Update/" + Suffix);
+                    ATsabsPassengerRailcar Update; Update.CurrentRole = R; Update.Derailed = true; Update.FlipDerailed = Flip;
+                    FUseState Out = Input;
+                    Update.UpdateUseState_Implementation(&Character, Location, &Component, Out);
+                    Check(Update.NativeUpdate == 1, "derailed Update must reach native railroad parent exactly once");
+                    Check(Update.SeenCharacter == &Character && Update.SeenLocation == &Location
+                        && Update.SeenComponent == &Component && Update.SeenOut == &Out, "forward ALL original Update parameters by identity");
+                    Check(Out.StateClass == 701 && Out.SetCalls == 1 && Out.UseComponent == &Component && Out.bIsTraceHit
+                        && Out.UseLocation.X == Location.X && Out.UseLocation.Y == Location.Y && Out.UseLocation.Z == Location.Z,
+                        "native boundary out-state survives unchanged; no passenger overwrite");
+                    Check(Update.FeedbackCalls == 0 && Update.BoardAttempts == 0, "terminal Update branch skips passenger path after flag mutation"); End(Before);
+                    Before = Failures; Begin("derailed.Description/" + Suffix);
+                    ATsabsPassengerRailcar Description; Description.CurrentRole = R; Description.Derailed = true; Description.FlipDerailed = Flip;
+                    FText Text = Description.GetLookAtDecription_Implementation(&Character, Input);
+                    Check(Description.NativeDescription == 1, "derailed description must reach native railroad parent exactly once");
+                    Check(Description.SeenCharacter == &Character && Description.SeenState == &Input, "forward original description Character and State by identity");
+                    Check(Text.Value == "NATIVE-BOUNDARY-DESCRIPTION|rebound-use", "return native description verbatim, without passenger prompt");
+                    Check(Description.FeedbackCalls == 0 && Description.BoardAttempts == 0, "terminal description branch skips passenger path"); End(Before);
+                }
+            }
+        }
+    }
+    for (Role R : {Authority, AutonomousProxy, SimulatedProxy}) {
+        for (ETsabsBoardingFeedback Feedback : {ETsabsBoardingFeedback::InvalidCharacter, ETsabsBoardingFeedback::Moving,
+            ETsabsBoardingFeedback::Unavailable, ETsabsBoardingFeedback::Busy, ETsabsBoardingFeedback::OutOfReach,
+            ETsabsBoardingFeedback::ExitBlocked, ETsabsBoardingFeedback::Ready}) {
+            for (bool PresentCharacter : {false, true}) {
+                int Before = Failures;
+                Begin("normal/role=" + std::to_string(R) + "/feedback=" + std::to_string(static_cast<int>(Feedback))
+                    + "/character=" + std::to_string(PresentCharacter));
+                ATsabsPassengerRailcar Car; Car.CurrentRole = R; Car.Feedback = Feedback;
+                AFGCharacterPlayer* Who = PresentCharacter ? &Character : nullptr;
+                // Even a forged cached derailed state cannot select native rerail on a normal car.
+                FUseState Forged; Forged.StateClass = 701; Forged.bIsTraceHit = true;
+                Car.OnUse_Implementation(Who, Forged);
+                Check(Car.BoardAttempts == (R == Authority ? 1 : 0), "normal boarding authority and call count unchanged");
+                Check(R != Authority || Car.BoardCharacter == Who, "normal boarding identity unchanged");
+                FUseState Out;
+                Car.UpdateUseState_Implementation(Who, Location, &Component, Out);
+                Check(Out.StateClass == (Feedback == ETsabsBoardingFeedback::Ready ? 101 : 102) && Out.SetCalls == 1,
+                    "normal Ready/Blocked output unchanged despite forged input");
+                FText Text = Car.GetLookAtDecription_Implementation(Who, Forged);
+                std::string Expected;
+                switch (Feedback) {
+                    case ETsabsBoardingFeedback::Ready: Expected = PresentCharacter ? "BOARD-PROMPT|Rebound-Use" : "BOARD-PROMPT|"; break;
+                    case ETsabsBoardingFeedback::Moving: Expected = "El tren debe ir a menos de {0} km/h para subir|300"; break;
+                    case ETsabsBoardingFeedback::Busy: Expected = "Plaza ocupada o entrada en curso"; break;
+                    case ETsabsBoardingFeedback::OutOfReach: Expected = "Acércate al vagón y míralo sin obstáculos"; break;
+                    case ETsabsBoardingFeedback::ExitBlocked: Expected = "No se ha encontrado una salida libre junto al vagón"; break;
+                    default: Expected = "Plaza de pasajero no disponible";
+                }
+                Check(Text.Value == Expected, "normal passenger feedback/key selection unchanged");
+                Check(Car.FeedbackCalls == 2, "normal Update and Description still evaluate passenger feedback exactly once each");
+                Check(Car.NativeUse == 0 && Car.NativeUpdate == 0 && Car.NativeDescription == 0, "normal path never delegates generic native vehicle use");
+                End(Before);
+            }
+        }
+    }
+    std::cout << "SUMMARY cases=" << Cases << " failures=" << Failures << '\n';
+    return Failures ? 1 : 0;
+}

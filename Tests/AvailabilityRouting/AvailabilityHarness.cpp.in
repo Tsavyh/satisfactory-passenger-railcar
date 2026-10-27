@@ -1,0 +1,241 @@
+// ROUTING SENTINELS ONLY. None of these boundaries implement FactoryGame or SML.
+#include <algorithm>
+#include <functional>
+#include <iostream>
+#include <map>
+#include <memory>
+#include <string>
+#include <vector>
+#include <utility>
+#ifndef WITH_EDITOR
+#define WITH_EDITOR 0
+#endif
+#define TEXT(x) x
+#define TSABSPASSENGERWAGON_API
+#define UCLASS(...)
+#define UPROPERTY(...)
+#define GENERATED_BODY() using Super = UGameWorldModule;
+using int32 = int;
+struct FString : std::string { using std::string::string; const char* operator*() const { return c_str(); } };
+struct FName { std::string value; FName(const char* s=""):value(s){} bool operator==(const FName& x)const{return value==x.value;} FString ToString()const{return FString(value.c_str());} };
+struct UObject { bool valid=true; virtual ~UObject()=default; };
+template<class T> bool IsValid(T* p){return p && p->valid;}
+struct UClass: UObject {int id; explicit UClass(int i):id(i){} };
+UClass OwnClass(1), FreightClass(2), OtherClass(3);
+template<class T> struct TSubclassOf { UClass* value=nullptr; TSubclassOf()=default; TSubclassOf(UClass* p):value(p){} UClass* Get()const{return value;} explicit operator bool()const{return value!=nullptr;} bool operator==(const TSubclassOf& x)const{return value==x.value;} };
+template<class T> using TObjectPtr=T*;
+int WeakSlots=0;
+template<class T> struct TWeakObjectPtr {T* p=nullptr;TWeakObjectPtr(){++WeakSlots;}TWeakObjectPtr(T* x):p(x){++WeakSlots;}TWeakObjectPtr(const TWeakObjectPtr& x):p(x.p){++WeakSlots;}~TWeakObjectPtr(){--WeakSlots;} T* Get()const{return IsValid(p)?p:nullptr;}void Reset(){p=nullptr;}};
+template<class T> struct TArray:std::vector<T> {using std::vector<T>::vector;void Add(T x){this->push_back(x);} template<class F>void RemoveAll(F fn){this->erase(std::remove_if(this->begin(),this->end(),fn),this->end());} void Empty(){this->clear();}};
+bool IsInGameThread(){return true;}
+#define check(x) do {if(!(x))throw std::runtime_error("contract check " #x);}while(0)
+struct FDelegateHandle { int id=0; bool IsValid()const{return id!=0;} void Reset(){id=0;} };
+int NextHandle=1;
+bool InProduction=false;
+int ForbiddenWrites=0, ProductionOwnAdds=0, ProductionOwnRemoves=0, CompletedAddCallbacks=0, CompletedRemoveCallbacks=0;
+struct Origin {bool old; explicit Origin(bool value):old(InProduction){InProduction=value;} ~Origin(){InProduction=old;}};
+enum class ELifecyclePhase { CONSTRUCTION, INITIALIZATION, POST_INITIALIZATION };
+enum ENetMode {NM_Standalone, NM_DedicatedServer, NM_ListenServer, NM_Client};
+struct AFGRecipeManager;
+struct UWorld: UObject {bool game=true; ENetMode net=NM_Standalone; AFGRecipeManager* manager=nullptr; bool IsGameWorld()const{return game;} ENetMode GetNetMode()const{return net;} };
+int SuperDispatches=0, SuperDestroys=0, Loads=0; bool Resolve=true;
+struct UGameWorldModule: UObject { UWorld* world=nullptr; FName owner=FName("TsabsPassengerWagon"); bool bRootModule=false; virtual void DispatchLifecycleEvent(ELifecyclePhase){++SuperDispatches;} virtual void BeginDestroy(){++SuperDestroys;} UWorld* GetWorld()const{return world;} FName GetOwnerModReference()const{return owner;} };
+struct UFGRecipe: UObject{};
+struct UTsabsPassengerRecipe {static UClass* StaticClass(){return &OwnClass;}};
+std::vector<std::string> Logs;
+#define UE_LOG(Category,Level,Fmt,...) Logs.push_back(std::string(#Level)+":"+Fmt)
+const char* GetNameSafe(UClass*){return "sentinel";}
+template<class T> UClass* LoadClass(UObject*, const char* path){++Loads; if(std::string(path)!="/Game/FactoryGame/Recipes/Vehicle/Train/Recipe_FreightWagon.Recipe_FreightWagon_C") throw std::runtime_error("wrong native path"); return Resolve?&FreightClass:nullptr;}
+enum class EGameObjectRegistrationFlags {Removed=1, Unregistered=2};
+EGameObjectRegistrationFlags operator|(EGameObjectRegistrationFlags a,EGameObjectRegistrationFlags b){return EGameObjectRegistrationFlags(int(a)|int(b));}
+struct FGameObjectRegistration {UClass* RegisteredObject=nullptr; FName OwnedByModReference; bool removed=false; bool HasAnyFlags(EGameObjectRegistrationFlags)const{return removed;} };
+struct UModContentRegistry: UObject {int calls=0; bool readback=true, wrongOwner=false, wrongObject=false, removed=false; static UModContentRegistry* current; static UModContentRegistry* Get(UWorld*){return current;} void RegisterRecipe(FName owner,TSubclassOf<UFGRecipe> recipe){++calls; if(owner.value!="TsabsPassengerWagon"||recipe.Get()!=&OwnClass)throw std::runtime_error("foreign registration");} bool GetRecipeInfo(TSubclassOf<UFGRecipe>,FGameObjectRegistration& out){out.RegisteredObject=wrongObject?&OtherClass:&OwnClass; out.OwnedByModReference=FName(wrongOwner?"Other":"TsabsPassengerWagon"); out.removed=removed; return readback;} };
+UModContentRegistry* UModContentRegistry::current=nullptr;
+using Hook = std::function<void(AFGRecipeManager*,const TArray<TSubclassOf<UFGRecipe>>&)>;
+// Native SML boundary: LIVE reference traversal, no handler snapshots.
+// On illegal mutation record the defect and defer destructive erase solely to
+// avoid invoking C++ UB in a diagnostic RED. The test must fail on the record.
+struct HookTable {
+ std::vector<std::pair<int,std::shared_ptr<Hook>>> entries; int active=0; std::vector<int> forbiddenPending;
+ auto begin(){return entries.begin();} auto end(){return entries.end();}
+ bool empty()const{return entries.empty();} auto size()const{return entries.size();}
+ Hook& operator[](int id){entries.emplace_back(id,std::make_shared<Hook>());return *entries.back().second;}
+ void erase(int id){entries.erase(std::remove_if(entries.begin(),entries.end(),[id](auto& e){return e.first==id;}),entries.end());}
+};
+HookTable AddHooks,RemoveHooks;
+int ActiveUnsubscribes=0,ActiveSubscribes=0,DestroyedLists=0,Subscriptions=0,Unsubscriptions=0;
+
+FDelegateHandle Subscribe(const char* method,Hook cb){auto& hooks=std::string(method).find("Remove")!=std::string::npos?RemoveHooks:AddHooks;if(hooks.active){++ActiveSubscribes;throw std::runtime_error("subscription mutates active native list");}++Subscriptions;FDelegateHandle h{NextHandle++};hooks[h.id]=cb;return h;}
+void Unsubscribe(const char* method,FDelegateHandle h){auto& hooks=std::string(method).find("Remove")!=std::string::npos?RemoveHooks:AddHooks;++Unsubscriptions;if(hooks.active){++ActiveUnsubscribes;hooks.forbiddenPending.push_back(h.id);std::cout<<"ACTIVE_LIST_UNSUBSCRIBE "<<method<<"\n";return;}hooks.erase(h.id);if(hooks.empty())++DestroyedLists;}
+#define SUBSCRIBE_METHOD_AFTER(Method,...) Subscribe(#Method,__VA_ARGS__)
+#define UNSUBSCRIBE_METHOD(Method,Handle) Unsubscribe(#Method,Handle)
+void Fire(HookTable& hooks,AFGRecipeManager* manager,const TArray<TSubclassOf<UFGRecipe>>& args){++hooks.active;for(const auto& [id,cb]:hooks){Origin origin(true);if(&hooks==&AddHooks)++CompletedAddCallbacks;else ++CompletedRemoveCallbacks;(*cb)(manager,args);}if(--hooks.active==0){for(int id:hooks.forbiddenPending)hooks.erase(id);hooks.forbiddenPending.clear();}}
+
+struct CleanupDelegate { std::map<int,std::function<void(UWorld*,bool,bool)>> handlers; template<class T> FDelegateHandle AddUObject(T* object,void(T::*fn)(UWorld*,bool,bool)){FDelegateHandle h{NextHandle++};handlers[h.id]=[object,fn](UWorld* w,bool a,bool b){if(IsValid(object))(object->*fn)(w,a,b);};return h;} void Remove(FDelegateHandle h){handlers.erase(h.id);} void Broadcast(UWorld* w){auto c=handlers;for(auto& [id,cb]:c)if(handlers.count(id))cb(w,true,true);} };
+struct FWorldDelegates {static CleanupDelegate OnWorldCleanup;};
+CleanupDelegate FWorldDelegates::OnWorldCleanup;
+template<class T> struct TGuardValue {T& ref; T old; TGuardValue(T& r,T val):ref(r),old(r){ref=val;} ~TGuardValue(){ref=old;} };
+struct AFGRecipeManager: UObject {
+ UWorld* world=nullptr; bool authority=true, reject=false; int ownAdds=0,ownRemoves=0,reads=0,depth=0,maxDepth=0; TArray<TSubclassOf<UFGRecipe>> available; std::function<void()> duringWrite;
+ std::function<void()> duringOwnWrite;
+ void OnOwnWrite(const TArray<TSubclassOf<UFGRecipe>>& recipes){if(duringOwnWrite&&std::any_of(recipes.begin(),recipes.end(),[](auto c){return c.Get()==&OwnClass;})){auto cb=std::exchange(duringOwnWrite,{});Origin origin(false);cb();}}
+ static AFGRecipeManager* Get(UWorld* w){return w?w->manager:nullptr;} UWorld* GetWorld()const{return world;} bool HasAuthority()const{return authority;}
+ bool IsRecipeAvailable(TSubclassOf<UFGRecipe> c){++reads;return std::find(available.begin(),available.end(),c)!=available.end();}
+ void Seed(UClass* c){if(std::none_of(available.begin(),available.end(),[c](auto x){return x.Get()==c;}))available.push_back(c);}
+ void AddAvailableRecipe(TSubclassOf<UFGRecipe> c){AddAvailableRecipes({c});}
+ void AddAvailableRecipes(TArray<TSubclassOf<UFGRecipe>> recipes){++depth;maxDepth=std::max(depth,maxDepth);for(auto c:recipes){if(InProduction){if(c.Get()==&OwnClass)++ProductionOwnAdds;else ++ForbiddenWrites;}if(c.Get()==&OwnClass)++ownAdds;if(!reject)Seed(c.Get());}OnOwnWrite(recipes);if(duringWrite){auto cb=std::exchange(duringWrite,{});cb();}Fire(AddHooks,this,recipes);--depth;}
+ void RemoveAvailableRecipes(const TArray<TSubclassOf<UFGRecipe>>& recipes){++depth;maxDepth=std::max(depth,maxDepth);auto copy=recipes;for(auto c:copy){if(InProduction){if(c.Get()==&OwnClass)++ProductionOwnRemoves;else ++ForbiddenWrites;}if(c.Get()==&OwnClass)++ownRemoves;if(!reject)available.erase(std::remove(available.begin(),available.end(),c),available.end());}OnOwnWrite(recipes);if(duringWrite){auto cb=std::exchange(duringWrite,{});cb();}Fire(RemoveHooks,this,recipes);--depth;}
+ void ResetAllRecipes(){RemoveAvailableRecipes(available);} // sentinel composition, NOT SDK implementation
+};
+@@POLICY@@
+@@HEADER@@
+@@PRODUCTION@@
+struct IModuleInterface {virtual ~IModuleInterface()=default;virtual void StartupModule(){} virtual void ShutdownModule(){} virtual bool SupportsDynamicReloading(){return true;}};
+struct UFGAbstractServerWidget {static UClass* StaticClass(){return &OtherClass;}};
+namespace TsabsPassenger {void InstallPassengerCrosshairHook(){} void UninstallPassengerCrosshairHook(){}}
+#define DEFINE_LOG_CATEGORY(x)
+#define IMPLEMENT_MODULE(a,b)
+@@WAGON@@
+int Failures=0;
+void Check(bool ok,const char* msg){if(!ok){++Failures;std::cout<<"ASSERT_FAIL "<<msg<<"\n";}}
+template<class F> void Case(const char* name,F fn){int before=Failures;fn();Check(ForbiddenWrites==0,"production never writes native/other recipe");std::cout<<"CASE "<<(Failures==before?"PASS ":"FAIL ")<<name<<"\n";}
+FTsabsPassengerWagonModule LifecycleOwner;
+int LiveFixtures=0;
+struct Fixture {
+ UWorld world; AFGRecipeManager manager; UModContentRegistry registry; UTsabsPassengerWorldModule module;
+ Fixture(){if(LiveFixtures++==0)LifecycleOwner.StartupModule();world.manager=&manager;manager.world=&world;module.world=&world;UModContentRegistry::current=&registry;Resolve=true;Logs.clear();Loads=0;}
+ void Init(){Origin origin(true);module.DispatchLifecycleEvent(ELifecyclePhase::INITIALIZATION);}
+ void Post(){Origin origin(true);module.DispatchLifecycleEvent(ELifecyclePhase::POST_INITIALIZATION);}
+ bool Own(){return manager.IsRecipeAvailable(&OwnClass);} bool Native(){return manager.IsRecipeAvailable(&FreightClass);}
+ ~Fixture(){FWorldDelegates::OnWorldCleanup.Broadcast(&world);module.BeginDestroy();if(--LiveFixtures==0){LifecycleOwner.ShutdownModule();Check(AddHooks.empty()&&RemoveHooks.empty()&&FWorldDelegates::OnWorldCleanup.handlers.empty(),"ordinary module shutdown releases every native and world handle");Check(WeakSlots==0,"no weak per-world registrations survive shutdown");}}
+};
+int main(){
+ Case("one_module_many_worlds_bounded_routes_and_subscriptions",[]{
+  int starts=Subscriptions,stops=Unsubscriptions;
+  {Fixture owner;owner.Init();owner.Post();LifecycleOwner.StartupModule();
+   const int expected=WITH_EDITOR?0:1;
+   Check(AddHooks.size()==expected&&RemoveHooks.size()==expected,"idempotent startup owns at most two native subscriptions");
+   for(int i=0;i<128;++i){
+    {Fixture world;world.Init();world.Post();world.Post();
+     Check(AddHooks.size()==expected&&RemoveHooks.size()==expected,"world churn never adds native subscriptions");
+     Check(FWorldDelegates::OnWorldCleanup.handlers.size()==2,"two simultaneous live world cleanup routes");
+     if(i%2)world.module.BeginDestroy();else FWorldDelegates::OnWorldCleanup.Broadcast(&world.world);
+     Check(FWorldDelegates::OnWorldCleanup.handlers.size()==1,"both teardown origins prune route immediately");
+     Check(WeakSlots==1,"only owner world weak route survives churn teardown");
+    }
+    Check(WeakSlots==1,"no expired per-world weak route accumulates");
+   }
+   Check(Subscriptions-starts==expected*2&&Unsubscriptions==stops,"exactly two subscriptions over whole module lifetime, no world unsubscriptions");
+  }
+  Check(Unsubscriptions-stops==(WITH_EDITOR?0:2),"ordinary shutdown retires exactly module-owned subscriptions");
+ });
+ Case("normal_shutdown_with_live_worlds_is_inert_idempotent",[]{
+  Fixture owner;owner.Init();owner.Post();Fixture second;second.Init();second.Post();
+  Check(AddHooks.active==0&&RemoveHooks.active==0,"test models ordinary shutdown outside complete native traversals, not own callback depth");
+  LifecycleOwner.ShutdownModule();LifecycleOwner.ShutdownModule();
+  Check(owner.module.GetContentState().bTearingDown&&second.module.GetContentState().bTearingDown,"normal shutdown inerts all still-live worlds");
+  Check(WeakSlots==0&&FWorldDelegates::OnWorldCleanup.handlers.empty(),"normal shutdown clears all weak routes and delegates");
+  Check(AddHooks.empty()&&RemoveHooks.empty(),"normal shutdown removes native subscriptions");
+  int reads=owner.manager.reads;owner.Post();owner.manager.AddAvailableRecipe(&FreightClass);
+  Check(owner.manager.reads==reads&&owner.manager.ownAdds==0,"late POST/native event after shutdown never rebind or grant");
+  Check(!LifecycleOwner.SupportsDynamicReloading(),"module declares live dynamic reload unsupported");
+ });
+#if WITH_EDITOR
+ Case("editor_never_patches_native_sdk_stubs",[]{Fixture f;f.Init();f.Post();Check(AddHooks.empty()&&RemoveHooks.empty(),"Editor isolates native hooks from autogenerated no-op SDK functions");Check(FWorldDelegates::OnWorldCleanup.handlers.size()==1,"Editor retains world cleanup lifecycle");});
+#else
+ Case("module_lifetime_native_owner_is_bounded_and_normally_retired",[]{
+ {Fixture f;Check(AddHooks.size()==1&&RemoveHooks.size()==1,"startup owns one hook per native method");f.Init();f.Post();FWorldDelegates::OnWorldCleanup.Broadcast(&f.world);f.module.BeginDestroy();Check(AddHooks.size()==1&&RemoveHooks.size()==1,"last-world destruction never retires native lists");Check(WeakSlots==0,"teardown removes per-world weak registration immediately");}
+ Check(AddHooks.empty()&&RemoveHooks.empty(),"normal shutdown physically retires last subscribers");Check(!LifecycleOwner.SupportsDynamicReloading(),"dynamic DLL reload explicitly unsupported");
+ });
+ Case("postinit_locked_legacy_revoke",[]{Fixture f;f.manager.Seed(&OwnClass);f.manager.Seed(&OtherClass);f.Init();Check(f.registry.calls==1,"early ownership registration");Check(Loads==0,"no early BP class load");f.Post();Check(!f.Own(),"locked native revokes legacy grant");Check(f.manager.IsRecipeAvailable(&OtherClass),"other recipe preserved");Check(f.manager.ownRemoves==1&&f.manager.ownAdds==0,"exact own-only revoke");f.Post();Check(f.manager.ownRemoves==1,"idempotent POST");});
+ Case("late_unlock_withdraw_alias_reset",[]{Fixture f;f.Init();f.Post();f.manager.AddAvailableRecipe(&FreightClass);Check(f.Own(),"single native add reaches completed bulk hook");Check(f.manager.ownAdds==1,"one grant despite recursive own bulk add");f.manager.AddAvailableRecipes({&FreightClass,&OtherClass});Check(f.manager.ownAdds==1,"repeated bulk idempotent");f.manager.RemoveAvailableRecipes({&FreightClass});Check(!f.Own()&&f.manager.ownRemoves==1,"withdraw revokes own only");Check(f.manager.IsRecipeAvailable(&OtherClass),"withdraw preserves others");f.manager.AddAvailableRecipe(&FreightClass);int beforeResetReads=f.manager.reads;f.manager.ResetAllRecipes();Check(f.manager.reads>beforeResetReads,"empty aliased remove arguments still route post-state read");Check(!f.Native()&&!f.Own(),"alias reset observes completed state even empty arguments");Check(f.manager.maxDepth<=2,"bounded recursive mutation");});
+ Case("existing_unlocked_and_new_world",[]{ {Fixture f;f.manager.Seed(&FreightClass);f.Init();f.Post();Check(f.Own(),"existing native unlocked grants");Check(f.module.GetContentState().bAvailabilityVerified,"readback verified");} {Fixture f;f.Init();f.Post();Check(!f.Own(),"new world does not retain prior unlock");f.manager.AddAvailableRecipe(&FreightClass);Check(f.Own(),"fresh world late unlock");} });
+ Case("native_withdraw_during_own_grant",[]{Fixture f;f.Init();f.Post();f.manager.duringOwnWrite=[&]{f.manager.RemoveAvailableRecipes({&FreightClass});};f.manager.AddAvailableRecipe(&FreightClass);Check(!f.Native()&&!f.Own(),"reentrant native withdraw settles before outer completed bulk returns");Check(f.manager.ownAdds==1&&f.manager.ownRemoves==1,"one correction, no recursive grants");Check(f.module.GetContentState().bAvailabilityVerified,"final reentrant readback");});
+ Case("client_proxy_context_guards",[]{
+  for(int guard=0;guard<8;++guard){Fixture f;f.Init();f.Post();f.manager.Seed(&OwnClass);UWorld other;AFGRecipeManager impostor;impostor.world=&f.world;
+   if(guard==0)f.world.net=NM_Client; if(guard==1)f.manager.authority=false; if(guard==2)f.module.owner=FName("Other"); if(guard==3)f.world.game=false; if(guard==4)f.manager.world=&other; if(guard==5)f.world.manager=&impostor; if(guard==6)f.world.valid=false; if(guard==7)f.manager.valid=false;
+   int reads=f.manager.reads,adds=f.manager.ownAdds,removes=f.manager.ownRemoves;f.manager.AddAvailableRecipes({&OtherClass});
+   Check(f.manager.reads==reads&&f.manager.ownAdds==adds&&f.manager.ownRemoves==removes,"guards before native reads and own writes");
+  }
+  {Fixture f;f.world.net=NM_Client;f.Init();f.Post();Check(f.registry.calls==1&&Loads==0,"client registers early but does not load/grant");f.manager.AddAvailableRecipe(&FreightClass);Check(!f.Own()&&f.manager.ownAdds==0,"no client local grant");}
+  {Fixture f;f.module.world=nullptr;f.Init();f.Post();Check(f.registry.calls==0&&Loads==0,"no world no registration load or grant");}
+ });
+ Case("registration_and_reference_fail_closed",[]{
+  for(int invalid=0;invalid<7;++invalid){Fixture f;f.manager.Seed(&FreightClass);f.manager.Seed(&OwnClass);f.manager.Seed(&OtherClass);
+   if(invalid==0)f.registry.readback=false;if(invalid==1)f.registry.wrongOwner=true;if(invalid==2)f.registry.wrongObject=true;if(invalid==3)f.registry.removed=true;if(invalid==4)UModContentRegistry::current=nullptr;if(invalid==5)Resolve=false;
+   if(invalid!=6)f.Init();f.Post();Check(!f.Own()&&f.Native()&&f.manager.IsRecipeAvailable(&OtherClass),"failed prerequisites revoke own, preserve native and other");Check(f.manager.ownRemoves==1&&f.manager.ownAdds==0,"failed prerequisites exactly one revoke");
+  }
+  {Fixture f;f.manager.Seed(&FreightClass);f.Init();f.Post();f.registry.removed=true;f.manager.AddAvailableRecipes({});Check(!f.Own(),"registration re-read after postinit");}
+ });
+ Case("failed_native_writes_are_not_success",[]{
+  {Fixture f;f.manager.Seed(&FreightClass);f.Init();f.manager.reject=true;f.Post();Check(!f.Own()&&!f.module.GetContentState().bAvailabilityVerified,"refused grant readback fails");Check(f.manager.ownAdds==1,"refused grant not retried infinitely");}
+  {Fixture f;f.manager.Seed(&OwnClass);f.Init();f.manager.reject=true;f.Post();Check(f.Own()&&!f.module.GetContentState().bAvailabilityVerified,"refused revoke readback fails");Check(f.manager.ownRemoves==1,"refused revoke not retried infinitely");}
+ });
+ Case("teardown_crossworld_stale_callbacks",[]{Fixture f;f.Init();f.Post();Check(AddHooks.size()==1&&RemoveHooks.size()==1,"exact two hook handles");f.Post();Check(AddHooks.size()==1&&RemoveHooks.size()==1,"duplicate post no duplicate hooks");UWorld other;AFGRecipeManager foreign;foreign.world=&other;other.manager=&foreign;foreign.AddAvailableRecipe(&FreightClass);Check(foreign.ownAdds==0&&f.manager.ownAdds==0,"foreign world never mutated");FWorldDelegates::OnWorldCleanup.Broadcast(&other);Check(AddHooks.size()==1,"foreign cleanup ignored");auto stale=AddHooks.empty()?Hook{}:*AddHooks.begin()->second;FWorldDelegates::OnWorldCleanup.Broadcast(&f.world);Check(AddHooks.size()==1&&RemoveHooks.size()==1,"world cleanup leaves exactly two module-owned hooks, not per-world subscriptions");int reads=f.manager.reads;f.manager.Seed(&FreightClass);if(stale)stale(&f.manager,{});else Check(false,"missing completed native after-hook");f.Post();Check(f.manager.reads==reads&&f.manager.ownAdds==0,"stale callback and late POST after cleanup inert");f.module.BeginDestroy();Check(AddHooks.size()==1&&RemoveHooks.size()==1,"destroy cleanup does not mutate module hooks");});
+ Case("weak_callback_does_not_keep_destroyed_module_live",[]{Fixture f;f.Init();f.Post();auto stale=AddHooks.empty()?Hook{}:*AddHooks.begin()->second;f.module.valid=false;int reads=f.manager.reads;if(stale)stale(&f.manager,{});else Check(false,"missing completed native after-hook");Check(f.manager.reads==reads,"invalid weak target not called");f.module.valid=true;});
+ Case("postwrite_authority_loss_aborts_readback",[]{Fixture f;f.manager.Seed(&FreightClass);f.Init();int atLoss=-1;f.manager.duringOwnWrite=[&]{f.manager.authority=false;atLoss=f.manager.reads;};f.Post();Check(atLoss==f.manager.reads&&!f.module.GetContentState().bAvailabilityVerified,"no cached manager reads after authority loss");});
+ Case("registration_invalidated_during_native_callback",[]{Fixture f;f.manager.Seed(&FreightClass);f.Init();f.manager.duringOwnWrite=[&]{f.registry.removed=true;};f.Post();Check(!f.Own()&&f.Native(),"registration invalidated during grant revokes only own");Check(!f.module.GetContentState().bRegistrationVerified,"fresh registration readback after native callback");});
+ Case("full_production_four_states",[]{for(bool native:{false,true})for(bool own:{false,true}){Fixture f;if(native)f.manager.Seed(&FreightClass);if(own)f.manager.Seed(&OwnClass);f.Init();f.Init();Check(f.registry.calls==1,"registration idempotent");Check(AddHooks.size()==1&&RemoveHooks.size()==1&&Loads==0,"INIT neither adds per-world native hooks nor loads native BP");f.Post();Check(f.Own()==f.Native(),"production exact four-state equality");Check(f.manager.ownAdds==(native&&!own?1:0)&&f.manager.ownRemoves==(!native&&own?1:0),"production exact four-state mutation counts");f.Post();Check(Loads==1,"POST reference loaded once only");}});
+ Case("late_manager_readiness",[]{Fixture f;f.Init();f.world.manager=nullptr;f.Post();Check(!f.module.GetContentState().bAvailabilityAttempted,"missing manager no availability claim");f.world.manager=&f.manager;f.manager.AddAvailableRecipe(&FreightClass);Check(f.Own(),"completed native operation picks up late manager");});
+ Case("authority_netmode_sentinels_not_real_multiplayer",[]{for(ENetMode mode:{NM_Standalone,NM_ListenServer,NM_DedicatedServer,NM_Client}){Fixture f;f.world.net=mode;f.Init();f.Post();f.manager.AddAvailableRecipe(&FreightClass);Check(f.Own()==(mode!=NM_Client),"native bulk unlock only mutates authoritative server world");f.manager.RemoveAvailableRecipes({&FreightClass});Check(!f.Own(),"withdraw applies on servers, no client local grant");}});
+ Case("cleanup_during_active_completed_add_must_not_destroy_SML_list",[]{Fixture f;f.Init();f.Post();int before=ActiveUnsubscribes;f.manager.duringOwnWrite=[&]{FWorldDelegates::OnWorldCleanup.Broadcast(&f.world);};f.manager.AddAvailableRecipe(&FreightClass);Check(ActiveUnsubscribes==before,"completed native after-hook list must not be mutated/destroyed while SML iterates it");Check(f.module.GetContentState().bTearingDown&&!f.module.GetContentState().bAvailabilityVerified,"cleanup is immediately inert");});
+ Case("cleanup_origins_add_remove_worldcleanup_begindestroy",[]{
+  for(bool remove:{false,true})for(bool foreign:{false,true})for(bool destroy:{false,true}){
+   Fixture f;f.Init();if(remove){f.manager.Seed(&FreightClass);f.Post();}else f.Post();
+   int before=ActiveUnsubscribes;FDelegateHandle foreignHandle;
+   auto cleanup=[&]{
+    Check((remove?RemoveHooks.active:AddHooks.active)>0,"cleanup occurs within surrounding live native dispatch");
+    if(foreign){Check(!f.module.GetContentState().bReconciling,"foreign handler executes AFTER own callback returned");if(remove)Check(!f.Own(),"own revoke callback already returned");else Check(f.Own(),"own grant callback already returned");}
+    auto stale=AddHooks.empty()?Hook{}:*AddHooks.begin()->second;
+    if(destroy)f.module.BeginDestroy();else FWorldDelegates::OnWorldCleanup.Broadcast(&f.world);
+    Check(f.module.GetContentState().bTearingDown&&!f.module.GetContentState().bPostInitialized&&!f.module.GetContentState().bAvailabilityVerified,"both teardown origins become inert immediately");
+    int reads=f.manager.reads;if(stale)stale(&f.manager,{});f.Post();f.module.BeginDestroy();FWorldDelegates::OnWorldCleanup.Broadcast(&f.world);Check(f.manager.reads==reads,"repeat cleanup reentry stale forwarding and POST remain inert");
+   };
+   if(foreign){foreignHandle=Subscribe(remove?"RemoveAvailableRecipes":"AddAvailableRecipes",[&](auto*,auto const&){if(f.manager.depth==1)cleanup();});}
+   else f.manager.duringOwnWrite=cleanup;
+   if(remove)f.manager.RemoveAvailableRecipes({&FreightClass});else f.manager.AddAvailableRecipe(&FreightClass);
+   Check(ActiveUnsubscribes==before,"neither cleanup origin removes an active native handler, even after own callback returned");
+   if(foreign)Unsubscribe(remove?"RemoveAvailableRecipes":"AddAvailableRecipes",foreignHandle);
+   Check(AddHooks.size()==1&&RemoveHooks.size()==1,"last world leaves exactly the module owner as last subscriber");
+  }
+ });
+ Case("nested_add_remove_transitions_settle_without_list_mutation",[]{
+  for(bool initial:{false,true})for(bool restore:{false,true}){
+   Fixture f;f.Init();if(initial)f.manager.Seed(&FreightClass);f.Post();int unsub=ActiveUnsubscribes,sub=ActiveSubscribes;
+   f.manager.duringOwnWrite=[&]{
+    Check((initial?RemoveHooks.active:AddHooks.active)>0,"own write nested within completed outer native dispatch");
+    if(initial)f.manager.AddAvailableRecipe(&FreightClass);else f.manager.RemoveAvailableRecipes({&FreightClass});
+    if(restore){if(initial)f.manager.RemoveAvailableRecipes({&FreightClass});else f.manager.AddAvailableRecipe(&FreightClass);}
+   };
+   if(initial)f.manager.RemoveAvailableRecipes({&FreightClass});else f.manager.AddAvailableRecipe(&FreightClass);
+   Check(f.Own()==f.Native()&&f.module.GetContentState().bAvailabilityVerified,"finite nested add/remove reads final manager state");
+   Check(f.Native()==(restore?!initial:initial),"nested transition outcome preserved");
+   Check(ActiveUnsubscribes==unsub&&ActiveSubscribes==sub&&f.manager.maxDepth<=3,"bounded nested events never mutate live handler arrays");
+  }
+ });
+ Case("own_weak_snapshot_survives_crossworld_cleanup",[]{
+  Fixture first;first.Init();first.Post();Fixture second;second.Init();second.Post();
+  first.manager.duringOwnWrite=[&]{
+   FWorldDelegates::OnWorldCleanup.Broadcast(&second.world);second.module.BeginDestroy();
+   Check(AddHooks.size()==1&&RemoveHooks.size()==1,"cross-world release during dispatch never touches native list");
+  };
+  int reads=second.manager.reads;first.manager.AddAvailableRecipe(&FreightClass);
+  Check(first.Own()&&second.manager.reads==reads,"snapshot revalidates torn-down foreign-world entries");
+  Check(WeakSlots==1,"cross-world cleanup leaves only live route");
+ });
+ Case("ordinary_shutdown_preserves_other_modules_native_handlers",[]{
+  Fixture f;f.Init();f.Post();int addCalls=0,removeCalls=0;
+  auto add=Subscribe("AddAvailableRecipes",[&](auto*,auto const&){++addCalls;});
+  auto remove=Subscribe("RemoveAvailableRecipes",[&](auto*,auto const&){++removeCalls;});
+  Check(AddHooks.active==0&&RemoveHooks.active==0,"shutdown originates outside all native dispatch");
+  LifecycleOwner.ShutdownModule();
+  Check(AddHooks.size()==1&&RemoveHooks.size()==1,"shutdown removes only own two subscriptions");
+  f.manager.AddAvailableRecipe(&FreightClass);f.manager.RemoveAvailableRecipes({&FreightClass});
+  Check(addCalls==1&&removeCalls==1&&f.manager.ownAdds==0,"foreign hooks remain functional, own routing inert");
+  Unsubscribe("AddAvailableRecipes",add);Unsubscribe("RemoveAvailableRecipes",remove);
+ });
+ Case("own_withdraw_restored_only_when_native_available",[]{Fixture f;f.manager.Seed(&FreightClass);f.Init();f.Post();f.manager.RemoveAvailableRecipes({&OwnClass});Check(f.Own()&&f.Native(),"own removal reconciles to still-unlocked native without modifying it");});
+#endif
+ std::cout<<"METRIC production_own_adds "<<ProductionOwnAdds<<"\nMETRIC production_own_removes "<<ProductionOwnRemoves<<"\nMETRIC forbidden_native_or_other_writes "<<ForbiddenWrites<<"\nMETRIC completed_add_callbacks "<<CompletedAddCallbacks<<"\nMETRIC completed_remove_callbacks "<<CompletedRemoveCallbacks<<"\nMETRIC active_subscriptions "<<ActiveSubscribes<<"\nMETRIC active_unsubscriptions "<<ActiveUnsubscribes<<"\nMETRIC subscriptions "<<Subscriptions<<"\nMETRIC unsubscriptions "<<Unsubscriptions<<"\n";
+ return Failures?1:0;
+}

@@ -167,6 +167,11 @@ bool ATsabsPassengerRailcar::TryBoardPilot(AFGCharacterPlayer* Character)
 
 void ATsabsPassengerRailcar::OnUse_Implementation(AFGCharacterPlayer* Character, const FUseState& State)
 {
+    if (IsDerailed())
+    {
+        Super::OnUse_Implementation(Character, State);
+        return;
+    }
     // Called on client and server by the standard player-owned use route. No railcar RPC.
     // Deliberately ignore every client-supplied state/hit/availability field.
     if (HasAuthority()) TryBoardPilot(Character);
@@ -180,6 +185,11 @@ bool ATsabsPassengerRailcar::IsUseable_Implementation() const
 void ATsabsPassengerRailcar::UpdateUseState_Implementation(AFGCharacterPlayer* Character, const FVector& AtLocation,
     UPrimitiveComponent* ComponentHit, FUseState& OutState)
 {
+    if (IsDerailed())
+    {
+        Super::UpdateUseState_Implementation(Character, AtLocation, ComponentHit, OutState);
+        return;
+    }
     OutState.SetUseState(GetBoardingFeedback(Character) == ETsabsBoardingFeedback::Ready ?
         UFGUseState_Valid::StaticClass() : UTsabsPassengerUseState_Blocked::StaticClass());
 }
@@ -192,6 +202,10 @@ FText ATsabsPassengerRailcar::FormatBoardingPrompt(const FText& UseKey)
 
 FText ATsabsPassengerRailcar::GetLookAtDecription_Implementation(AFGCharacterPlayer* Character, const FUseState& State) const
 {
+    if (IsDerailed())
+    {
+        return Super::GetLookAtDecription_Implementation(Character, State);
+    }
     switch (GetBoardingFeedback(Character))
     {
     case ETsabsBoardingFeedback::Ready:

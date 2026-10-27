@@ -15,8 +15,8 @@ bool FTsabsDescriptorTest::RunTest(const FString& Parameters)
     TestTrue(TEXT("Native concrete descriptor"), Class->HasAnyClassFlags(CLASS_Native) && !Class->HasAnyClassFlags(CLASS_Abstract));
     const UFGVehicleDescriptor* Descriptor = Class->GetDefaultObject<UFGVehicleDescriptor>();
     TestEqual(TEXT("Describes existing passenger car, not freight"), Descriptor->mVehicleClass.Get(), ATsabsPassengerRailcar::StaticClass());
-    TestEqual(TEXT("Name uses real virtual instance accessor"), Descriptor->GetItemNameFromInstance().ToString(), FString(TEXT("Vagón de pasajeros (prueba)")));
-    TestFalse(TEXT("Description is explicit"), Descriptor->GetItemDescriptionFromInstance().IsEmpty());
+    TestEqual(TEXT("Name uses real virtual instance accessor"), Descriptor->GetItemNameFromInstance().ToString(), FString(TEXT("Vagón de pasajeros")));
+    TestEqual(TEXT("Description reflects accepted one-passenger behavior without trial claims"), Descriptor->GetItemDescriptionFromInstance().ToString(), FString(TEXT("Vagón para viajar como pasajero sin controlar el tren. Cámara exterior giratoria, sin inventario de carga. Capacidad actual: 1 pasajero. Solo se puede subir y bajar a menos de 30 km/h.")));
     UClass* Category = Descriptor->GetCategoryFromInstance();
     TestNotNull(TEXT("Category resolves"), Category);
     if (Category) {

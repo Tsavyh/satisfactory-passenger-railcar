@@ -6,14 +6,38 @@
 #include "Equipment/FGBuildGun.h"
 #include "TsabsPassengerDescriptor.h"
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTsabsFreeRecipeTest, "Tsabs.Passenger.Content.FreeBuildGunRecipe", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-bool FTsabsFreeRecipeTest::RunTest(const FString& Parameters)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTsabsNativeCostRecipeTest, "Tsabs.Passenger.Content.NativeCostBuildGunRecipe", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FTsabsNativeCostRecipeTest::RunTest(const FString& Parameters)
 {
     UClass* Class = LoadClass<UFGRecipe>(nullptr, TEXT("/Script/TsabsPassengerWagon.TsabsPassengerRecipe"));
     if (!TestNotNull(TEXT("Native passenger recipe exists"), Class)) return false;
     TestTrue(TEXT("Concrete native recipe"), Class->HasAnyClassFlags(CLASS_Native) && !Class->HasAnyClassFlags(CLASS_Abstract));
     const UFGRecipe* Recipe = Class->GetDefaultObject<UFGRecipe>();
-    TestTrue(TEXT("Genuinely zero ingredients"), Recipe->GetIngredients().IsEmpty());
+    // The instance accessor is inline raw mIngredients; static SDK GetIngredients is a stub.
+    const auto& Ingredients = Recipe->GetIngredients();
+    TestEqual(TEXT("Exactly three base ingredients, never free or partial"), Ingredients.Num(), 3);
+    const FArrayProperty* RawIngredients = FindFProperty<FArrayProperty>(Class, TEXT("mIngredients"));
+    if (TestNotNull(TEXT("Raw ingredient array exists"), RawIngredients)) {
+        FScriptArrayHelper Raw(RawIngredients, RawIngredients->ContainerPtrToValuePtr<void>(Recipe));
+        TestEqual(TEXT("Raw and inline ingredient counts agree"), Raw.Num(), Ingredients.Num());
+        TestEqual(TEXT("Raw recipe has all three costs"), Raw.Num(), 3);
+    }
+    const TCHAR* Paths[] = {
+        TEXT("/Game/FactoryGame/Resource/Parts/ModularFrame/Desc_ModularFrame.Desc_ModularFrame_C"),
+        TEXT("/Game/FactoryGame/Resource/Parts/SteelPipe/Desc_SteelPipe.Desc_SteelPipe_C"),
+        TEXT("/Game/FactoryGame/Resource/Parts/SteelPlate/Desc_SteelPlate.Desc_SteelPlate_C")
+    };
+    const int32 Amounts[] = {5, 10, 10}; // Shipped CL513885 Docs, not placeholder freight CDO data.
+    for (int32 Index = 0; Index < 3; ++Index) {
+        UClass* Item = LoadClass<UFGItemDescriptor>(nullptr, Paths[Index]);
+        TestNotNull(FString::Printf(TEXT("Native ingredient resolves: %s"), Paths[Index]), Item);
+        if (Item) TestTrue(TEXT("Ingredient is a concrete item descriptor"), Item->IsChildOf(UFGItemDescriptor::StaticClass()) && !Item->HasAnyClassFlags(CLASS_Abstract));
+        if (Ingredients.IsValidIndex(Index)) {
+            TestNotNull(TEXT("Actual ingredient is not null"), Ingredients[Index].ItemClass.Get());
+            TestEqual(TEXT("Exact native ingredient class (normal modular frame / pipe / beam)"), Ingredients[Index].ItemClass.Get(), Item);
+            TestEqual(TEXT("Unscaled native base ingredient amount"), Ingredients[Index].Amount, Amounts[Index]);
+        }
+    }
     const auto& Products = Recipe->GetProducts();
     if (TestEqual(TEXT("One product"), Products.Num(), 1)) {
         TestEqual(TEXT("Product is passenger descriptor"), Products[0].ItemClass.Get(), UTsabsPassengerDescriptor::StaticClass());

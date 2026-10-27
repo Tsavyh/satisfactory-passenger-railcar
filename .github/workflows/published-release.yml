@@ -1,0 +1,89 @@
+name: Published release verification
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: published-package-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  published-package:
+    name: Download, hashes and packaging roundtrip
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - name: Check source snapshot
+        run: python -B -m unittest discover -s Tests -p test_source_manifest.py -v
+      - name: Verify actual public download and roundtrip its runtime payloads
+        shell: python {0}
+        run: |
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import re
+          import subprocess
+          import sys
+          import tempfile
+          import urllib.request
+          import zipfile
+          manifest = json.loads(Path("SOURCE-MANIFEST.json").read_text())
+          version = manifest["version"]
+          if re.fullmatch(r"(?:0|[1-9][0-9]*)[.](?:0|[1-9][0-9]*)[.](?:0|[1-9][0-9]*)", version) is None:
+              raise RuntimeError("Invalid source version")
+          asset = manifest["public_binary"]["asset"]
+          expected = manifest["public_binary"]["sha256"]
+          if asset != f"satisfactory-passenger-railcar-{version}-windows-steam.zip":
+              raise RuntimeError("Unexpected asset name")
+          url = f"https://github.com/Tsavyh/satisfactory-passenger-railcar/releases/download/v{version}/{asset}"
+          sys.path.insert(0, str(Path("tools").resolve()))
+          import verify_release as verifier
+          with tempfile.TemporaryDirectory(dir=os.environ["RUNNER_TEMP"]) as scratch:
+              root = Path(scratch)
+              archive = root / asset
+              with urllib.request.urlopen(url, timeout=30) as response, archive.open("xb") as output:
+                  total = 0
+                  while chunk := response.read(65536):
+                      total += len(chunk)
+                      if total > verifier.MAX_ZIP:
+                          raise RuntimeError("Download exceeds verifier limit")
+                      output.write(chunk)
+              subprocess.run([sys.executable, "-B", "tools/verify_release.py", str(archive),
+                              "--expected-version", version, "--sha256", expected], check=True, timeout=120)
+              plugin = root / "cooked-plugin"
+              plugin.mkdir()
+              with zipfile.ZipFile(archive) as source:
+                  for name, digest in manifest["public_binary"]["runtime_files_sha256"].items():
+                      if name not in {n.removeprefix(verifier.PREFIX) for n in verifier.REQUIRED if n.startswith(verifier.PREFIX)}:
+                          raise RuntimeError("Unknown runtime path")
+                      data = source.read(verifier.PREFIX + name)
+                      if hashlib.sha256(data).hexdigest() != digest:
+                          raise RuntimeError("Runtime differs from the accepted build")
+                      target = plugin / name
+                      target.parent.mkdir(parents=True, exist_ok=True)
+                      target.write_bytes(data)
+              generated = root / "rewrapped"
+              subprocess.run([sys.executable, "-B", "tools/package_release.py", str(plugin),
+                              "--output", str(generated)], check=True, timeout=120)
+              rebuilt = generated / asset
+              digest = hashlib.sha256(rebuilt.read_bytes()).hexdigest()
+              subprocess.run([sys.executable, "-B", "tools/verify_release.py", str(rebuilt),
+                              "--expected-version", version, "--sha256", digest], check=True, timeout=120)
+              with zipfile.ZipFile(rebuilt) as wrapped:
+                  for name, expected_payload in manifest["public_binary"]["runtime_files_sha256"].items():
+                      if hashlib.sha256(wrapped.read(verifier.PREFIX + name)).hexdigest() != expected_payload:
+                          raise RuntimeError("Runtime changed during packaging")
+              print("PASS: public ZIP, exact accepted runtime hashes, source snapshot and packaging roundtrip.")
+              print("No Unreal build, game execution, installation or multiplayer certification.")
