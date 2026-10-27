@@ -79,7 +79,7 @@
   },
   "public_binary": {
     "asset": "satisfactory-passenger-railcar-0.1.15-windows-steam.zip",
-    "sha256": "5f43412cd2b7a96f3d8adbcfdc03af37764ced30da6fd3ff4a9d1cdf5f0df750",
+    "sha256": "08aa5cb1633088414c2e79538fc500085f34262b241d0327320d321dd403c21d",
     "runtime_files_sha256": {
       "TsabsPassengerWagon.uplugin": "f871b0827dc5b3bbbf44a26596c678bbfea13deb7d29afaeb44a4554f34404e8",
       "Binaries/Win64/FactoryGameSteam-TsabsPassengerWagon-Win64-Shipping.dll": "cfeeb668e0bdba227ac12776f87d2ddbe49b79521cf15fa059f8295c294be1e5",
