@@ -10,6 +10,17 @@
 
 Obtén/prepara ese entorno mediante la documentación oficial de Satisfactory Modding (https://docs.ficsit.app/). Aquí solo se publica el plugin propio, no esas herramientas ni el SDK. No se ha probado este proceso de compilación en un host Linux.
 
+## Generar el contenedor público
+
+Tras cocinar el plugin, usa [el empaquetador](docs/RELEASE-PACKAGING.es.md) para
+crear ZIP verificado y SHA256SUMS.txt en un directorio nuevo, sin sobrescribir:
+
+```sh
+python -B tools/package_release.py "/ruta/al/plugin-cocinado" --output "/ruta/al/paquete-nuevo"
+```
+
+Solo empaqueta offline; no compila Unreal ni valida el juego.
+
 ## Colocar el plugin
 
 En un Starter Project separado y preparado, coloca este repositorio en `Mods/TsabsPassengerWagon`, de modo que exista `Mods/TsabsPassengerWagon/TsabsPassengerWagon.uplugin`. No anides otra carpeta del mismo nombre. No copies Binaries/Intermediate de otra versión.

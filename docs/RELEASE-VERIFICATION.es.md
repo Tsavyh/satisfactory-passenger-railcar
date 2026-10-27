@@ -132,3 +132,42 @@ el verificador original en Linux/Python 3.12 con el ZIP público 0.1.9. Esta
 corrección de metadatos se probó en Windows 10/Python 3.14.7, normal y con `-O`:
 25 pruebas correctas, conservando las 21 originales, y el ZIP público real 0.1.13
 correcto con la suma anterior. No se atribuye una nueva ejecución Linux ni CI alojada.
+
+## CI de paquetes alojada
+
+[Release package verification](../.github/workflows/package-verification.yml)
+se ejecuta en pushes, pull requests y manualmente:
+
+- Cuatro jobs con Python 3.12 ejecutan `test_release_verifier.py` y
+  `test_release_packager.py`: Ubuntu
+  24.04 y Windows Server 2022, con `PYTHONOPTIMIZE=0` y `1` en cada uno. No se
+  seleccionan las pruebas Bash exclusivas de POSIX ni se sustituye la CI separada
+  de políticas sin Engine.
+- Un job Ubuntu descarga el ZIP público fijo 0.1.9 a un directorio temporal del
+  runner, impone un máximo de descarga de 128 MiB y ejecuta el verificador con
+  la versión `0.1.9` y su SHA-256 fijado por separado
+  `06a0030d30ae31315d962f8b7bed3a6b9c03ba7aa816ed0d1fcdc1552a0cdbf8`. La E/S de red tiene un timeout de 30 segundos;
+  las comprobaciones hijas se limitan a 120 segundos y los jobs a diez minutos.
+  Tras verificar el ZIP con su suma fijada, el job materializa únicamente los
+  seis archivos permitidos del plugin enumerados arriba en una fixture temporal
+  de plugin cocinado, con lecturas por bloques limitadas (128 MiB por archivo),
+  no mediante extracción general del ZIP. Ejecuta el empaquetador y el verificador
+  real sobre el nuevo contenedor/checksum, y comprueba que los seis SHA-256 no
+  cambian. No ejecuta ni carga ningún payload: no compila Unreal ni valida
+  jugabilidad o arranque. Elimina fixture y salidas temporales; no instala ni sube nada.
+
+Todos usan runners de GitHub, permisos de solo lectura y acciones fijadas por
+SHA, sin conservar credenciales del checkout. No usan secretos ni cachés y no
+publican ni despliegan nada.
+
+La descarga pública es una fixture de regresión, no la verificación de una futura
+publicación aún no subida. Si el archivo no está disponible o cambian sus bytes,
+el job falla: no se debe omitir la suma. Actualizar la fixture requiere revisar
+su URL fija, versión esperada y SHA-256 contrastado por separado. Antes de publicar
+un paquete nuevo, sigue siendo necesario ejecutar el comando offline sobre ese
+ZIP exacto. Un workflow verde conserva los límites de paquete anteriores; no
+certifica carga Windows, arranque del juego ni multijugador.
+
+Esta definición describe las comprobaciones alojadas previstas, no un nuevo
+resultado CI para esta composición local corregida. El verificador offline en
+sí nunca extrae ni ejecuta archivos del ZIP.

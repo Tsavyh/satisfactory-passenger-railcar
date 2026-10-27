@@ -130,3 +130,40 @@ the original verifier on Linux/Python 3.12 with the public 0.1.9 wrapper. This
 metadata correction was exercised on Windows 10/Python 3.14.7, normally and with
 `-O`: all 25 verifier tests passed, preserving the original 21, and the real public
 0.1.13 ZIP passed with the checksum above. No new Linux or hosted-CI run is claimed.
+
+## Hosted package CI
+
+[Release package verification](../.github/workflows/package-verification.yml)
+runs on pushes, pull requests and manual dispatch:
+
+- Four Python 3.12 jobs run `test_release_verifier.py` and
+  `test_release_packager.py`: Ubuntu 24.04 and
+  Windows Server 2022, each with `PYTHONOPTIMIZE=0` and `1`. This does not select
+  the POSIX-only Bash runner tests or replace the separate standalone policy CI.
+- One Ubuntu job downloads the fixed public v0.1.9 wrapper into a temporary
+  runner directory, enforces a 128 MiB download cap, and calls the verifier with
+  version `0.1.9` and its separately pinned SHA-256
+  `06a0030d30ae31315d962f8b7bed3a6b9c03ba7aa816ed0d1fcdc1552a0cdbf8`. Network IO has a 30-second timeout;
+  child checks are limited to 120 seconds and jobs to ten minutes. After the pinned ZIP passes verification, the job materializes only the six
+  allowlisted plugin payloads listed above into a temporary cooked-plugin fixture,
+  using bounded chunked reads (128 MiB per member), not general ZIP extraction.
+  It runs the packager and real verifier on the new wrapper/checksum, then checks
+  all six payload SHA-256 values are unchanged. No payload is executed or loaded;
+  this is neither an Unreal build nor gameplay/game-startup validation. All
+  temporary fixture and output files are removed; nothing is installed or uploaded.
+
+All jobs use GitHub-hosted runners, read-only repository permission and
+SHA-pinned actions without persisted checkout credentials. No secrets, caches,
+release publication or deployment are involved.
+
+The public download is a regression fixture, not verification of a future
+unpublished release. If the asset is unavailable or its bytes change, the job
+fails; do not bypass the checksum. Updating the fixture requires deliberate
+review of its fixed URL, expected version and independently verified SHA-256.
+Before publishing a new package, still run the offline command on that exact ZIP.
+A green workflow retains the package-only limits above and does not certify
+Windows loading, game startup or multiplayer.
+
+This workflow definition describes intended hosted checks, not a new hosted-CI
+result for this corrected local composition. The offline verifier itself never
+extracts or executes archive members.

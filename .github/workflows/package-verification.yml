@@ -1,0 +1,144 @@
+name: Release package verification
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verifier-tests:
+    name: Verifier (${{ matrix.os }}, optimize=${{ matrix.optimize }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022]
+        optimize: ['0', '1']
+    env:
+      PYTHONOPTIMIZE: ${{ matrix.optimize }}
+    defaults:
+      run:
+        shell: python {0}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - name: Run portable verifier tests
+        run: |
+          import subprocess
+          import sys
+          print(sys.version, flush=True)
+          print(f"Optimization level: {sys.flags.optimize}", flush=True)
+          subprocess.run(
+              [sys.executable, "-B", "-m", "unittest", "discover", "-s", "Tests",
+               "-p", "test_release_verifier.py", "-v"],
+              check=True, timeout=120,
+          )
+      - name: Run portable packager tests
+        run: |
+          import subprocess
+          import sys
+          subprocess.run(
+              [sys.executable, "-B", "-m", "unittest", "discover", "-s", "Tests",
+               "-p", "test_release_packager.py", "-v"],
+              check=True, timeout=120,
+          )
+
+  reference-package:
+    name: Public 0.1.9 package regression
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: python {0}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - name: Check pinned public package without installing it
+        run: |
+          import hashlib
+          import os
+          from pathlib import Path
+          import subprocess
+          import sys
+          import tempfile
+          import urllib.request
+          import zipfile
+
+          name = "satisfactory-passenger-railcar-0.1.9-windows-steam.zip"
+          url = "https://github.com/Tsavyh/satisfactory-passenger-railcar/releases/download/v0.1.9/" + name
+          expected_sha = "06a0030d30ae31315d962f8b7bed3a6b9c03ba7aa816ed0d1fcdc1552a0cdbf8"
+          limit = 128 * 1024 * 1024
+          with tempfile.TemporaryDirectory(prefix="railcar-reference-", dir=os.environ["RUNNER_TEMP"]) as scratch:
+              archive = Path(scratch) / name
+              with urllib.request.urlopen(url, timeout=30) as response, archive.open("xb") as output:
+                  total = 0
+                  while chunk := response.read(min(64 * 1024, limit - total + 1)):
+                      total += len(chunk)
+                      if total > limit:
+                          raise RuntimeError("Reference package exceeds download limit")
+                      output.write(chunk)
+              subprocess.run(
+                  [sys.executable, "-B", "tools/verify_release.py", str(archive),
+                   "--expected-version", "0.1.9", "--sha256", expected_sha],
+                  check=True, timeout=120,
+              )
+              # Only materialize known payloads after authentic ZIP verification.
+              sys.path.insert(0, str(Path("tools").resolve()))
+              import verify_release as verifier
+              plugin = Path(scratch) / "cooked-plugin"
+              plugin.mkdir()
+              payload_hashes = {}
+              with zipfile.ZipFile(archive) as source:
+                  for member in sorted(name for name in verifier.REQUIRED if name.startswith(verifier.PREFIX)):
+                      target = plugin / member.removeprefix(verifier.PREFIX)
+                      target.parent.mkdir(parents=True, exist_ok=True)
+                      digest = hashlib.sha256()
+                      with source.open(member) as incoming, target.open("xb") as outgoing:
+                          total = 0
+                          while chunk := incoming.read(verifier.CHUNK):
+                              total += len(chunk)
+                              if total > verifier.MAX_MEMBER:
+                                  raise RuntimeError("Reference payload exceeds size limit")
+                              outgoing.write(chunk)
+                              digest.update(chunk)
+                      payload_hashes[member] = digest.hexdigest()
+              generated = Path(scratch) / "generated-release"
+              subprocess.run(
+                  [sys.executable, "-B", "tools/package_release.py", str(plugin), "--output", str(generated)],
+                  check=True, timeout=120,
+              )
+              rebuilt = generated / name
+              checksum = (generated / "SHA256SUMS.txt").read_text(encoding="ascii")
+              fields = checksum.split()
+              if len(fields) != 2 or fields[1] != name:
+                  raise RuntimeError("Generated checksum format mismatch")
+              subprocess.run(
+                  [sys.executable, "-B", "tools/verify_release.py", str(rebuilt),
+                   "--expected-version", "0.1.9", "--sha256", fields[0]],
+                  check=True, timeout=120,
+              )
+              with zipfile.ZipFile(rebuilt) as wrapped:
+                  for member, expected in payload_hashes.items():
+                      digest = hashlib.sha256()
+                      with wrapped.open(member) as incoming:
+                          while chunk := incoming.read(verifier.CHUNK):
+                              digest.update(chunk)
+                      if digest.hexdigest() != expected:
+                          raise RuntimeError("Payload changed during rewrap")
+              print("Authentic prebuilt payload roundtrip passed; no Unreal build or game execution.")

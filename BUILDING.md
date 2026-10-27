@@ -18,6 +18,17 @@ This repository is the **plugin**, not a complete Satisfactory SDK checkout. Its
 
 Obtain and configure dependencies separately using the [Satisfactory Modding documentation](https://docs.ficsit.app/). They are not redistributed or relicensed by this project. Building on a Linux host has not been validated.
 
+## Generate the public wrapper
+
+After cooking, use [release packaging](docs/RELEASE-PACKAGING.md) to create a
+verified ZIP and SHA256SUMS.txt in a new directory without overwriting old output:
+
+```sh
+python -B tools/package_release.py "/path/to/cooked-plugin" --output "/path/to/new-release"
+```
+
+This is offline packaging only, not Unreal compilation or game validation.
+
 ## Layout and package
 
 Place this repository in `Mods/TsabsPassengerWagon` inside a separately prepared Starter Project. The descriptor must be `Mods/TsabsPassengerWagon/TsabsPassengerWagon.uplugin`, not nested in an additional directory. Do not reuse another version's Binaries/Intermediate.
