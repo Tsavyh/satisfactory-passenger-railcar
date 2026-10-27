@@ -83,6 +83,31 @@ bits rather than arithmetic or infinity-valued library calls that Clang may
 transform under those options. These are host policy/runner checks, not a build
 of the Unreal plugin.
 
+## Continuous integration
+
+[Standalone checks](.github/workflows/standalone-checks.yml) runs on every push
+and pull request, with a manual `workflow_dispatch` entry point. It uses only
+GitHub-hosted runners and does not need repository secrets or the game/SDK:
+
+- Ubuntu 24.04: GCC and Clang each run the 26 policy cases in precise and
+  fast-math modes, the Python suites discovered by `test_*.py` (contracts, runner, verifier and packager tests), and ShellCheck.
+- Windows Server 2022: the installed Visual Studio 2022 x64 toolchain runs
+  `Tests/run-policy-tests.cmd` in `/fp:precise` and `/fp:fast` modes, followed
+  by the two Python native-prerequisite contracts. The Bash runner tests are
+  Linux-only and are not selected on Windows.
+
+CI uses Python 3.12. Compiler versions are printed in the job logs; the hosted
+MSVC toolset is not pinned to the release-build toolchain above. Each job has a
+ten-minute timeout. A new run cancels an older run for the same event and PR/ref.
+The workflow has read-only repository access, does not persist Git credentials,
+and pins its actions to commit SHAs.
+
+A green run establishes only these standalone checks. It does not compile or
+package the Unreal plugin, certify a published release ZIP/DLL, launch Satisfactory/Proton,
+or validate gameplay, RPC delivery or multiplayer. Release and in-game checks
+remain separate; this workflow does not publish or deploy anything.
+
+
 ## Unreal automation
 
 ```bat

@@ -75,6 +75,31 @@ IEEE-754 fijos para que Clang no transforme su generación con fast-math.
 Son pruebas de políticas y del ejecutor en el host, no una compilación del
 plugin Unreal.
 
+## Integración continua
+
+[Standalone checks](.github/workflows/standalone-checks.yml) se ejecuta en cada
+push y pull request, y permite ejecución manual con `workflow_dispatch`. Solo
+usa runners alojados por GitHub; no necesita secretos del repositorio ni juego/SDK:
+
+- Ubuntu 24.04: GCC y Clang ejecutan cada uno los 26 casos de política en modo
+  preciso y fast-math, las suites Python descubiertas por `test_*.py` (contratos, ejecutor, verificador y empaquetador) y ShellCheck.
+- Windows Server 2022: la herramienta x64 de Visual Studio 2022 instalada ejecuta
+  `Tests/run-policy-tests.cmd` con `/fp:precise` y `/fp:fast`, seguida de los dos
+  contratos Python del prerrequisito nativo. Las pruebas del ejecutor Bash son
+  exclusivas de Linux y no se seleccionan en Windows.
+
+La CI usa Python 3.12. Las versiones de compilador aparecen en los logs; el
+MSVC alojado no se fija a la versión usada para compilar la publicación anterior.
+Cada job tiene un límite de diez minutos. Una ejecución nueva cancela la anterior
+para el mismo evento y PR/ref. El workflow tiene acceso de solo lectura, no
+conserva credenciales Git y fija sus acciones a hashes de commit.
+
+Un resultado verde solo acredita estas pruebas sin Engine. No compila ni
+empaqueta el plugin Unreal, certifica los ZIP/DLL publicados, arranca Satisfactory/Proton ni
+valida jugabilidad, entrega RPC o multijugador. La publicación y las pruebas en
+juego siguen siendo independientes; este workflow no publica ni despliega nada.
+
+
 ## Pruebas en editor y límites
 
 ```bat
