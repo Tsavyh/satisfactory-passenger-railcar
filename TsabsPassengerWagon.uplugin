@@ -1,18 +1,32 @@
 {
   "FileVersion": 3,
-  "Version": 14,
-  "VersionName": "0.1.13",
-  "SemVersion": "0.1.13",
+  "Version": 17,
+  "VersionName": "0.1.16",
+  "SemVersion": "0.1.16",
   "GameVersion": ">=513885",
   "FriendlyName": "Satisfactory Passenger Railcar",
-  "Description": "Experimental passenger railcar with an exterior orbit camera and speed-gated safe access.",
+  "Description": "Experimental two-passenger railcar with independent exterior orbit cameras and speed displays; native-backed rail behavior.",
   "Category": "Modding",
   "EnabledByDefault": true,
   "CanContainContent": true,
   "RequiredOnRemote": true,
-  "Modules": [{"Name": "TsabsPassengerWagon", "Type": "Runtime", "LoadingPhase": "Default"}],
+  "Modules": [
+    {
+      "Name": "TsabsPassengerWagon",
+      "Type": "Runtime",
+      "LoadingPhase": "Default"
+    }
+  ],
   "Plugins": [
-    {"Name": "SML", "Enabled": true, "SemVersion": "^3.12.0"},
-    {"Name": "EnhancedInput", "Enabled": true, "BasePlugin": true}
+    {
+      "Name": "SML",
+      "Enabled": true,
+      "SemVersion": "^3.12.0"
+    },
+    {
+      "Name": "EnhancedInput",
+      "Enabled": true,
+      "BasePlugin": true
+    }
   ]
 }

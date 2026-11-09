@@ -14,5 +14,5 @@ public:
 
 enum class ETsabsBoardingFeedback : uint8
 {
-    Ready, InvalidCharacter, Moving, Unavailable, Busy, OutOfReach, ExitBlocked
+    Ready, InvalidCharacter, Unavailable, Busy, OutOfReach, ExitBlocked
 };

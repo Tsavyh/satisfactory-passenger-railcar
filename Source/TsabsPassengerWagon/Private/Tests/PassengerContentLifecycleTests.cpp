@@ -21,12 +21,15 @@ bool FTsabsContentLifecycleTest::RunTest(const FString& Parameters)
         TestFalse(TEXT("No world cannot register"), ShouldRegisterPassengerRecipe(Phase, false, true, false));
         TestFalse(TEXT("No runtime owner cannot register"), ShouldRegisterPassengerRecipe(Phase, true, false, false));
         TestFalse(TEXT("Idempotent registration"), ShouldRegisterPassengerRecipe(Phase, true, true, true));
+#if defined(TSABS_AVAILABILITY_POLICY_VERSION)
         for (bool Client : {false, true}) for (bool Authority : {false, true}) {
-            TestEqual(TEXT("Grant only POSTINIT server plus manager authority"), ShouldGrantPassengerRecipe(Phase, true, Client, Authority, true, false), Phase == ELifecyclePhase::POST_INITIALIZATION && !Client && Authority);
+            const auto Action = DecidePassengerAvailability(Phase, true, true, Client, Authority, true, true, false, true, false);
+            TestTrue(TEXT("Freight grant only POSTINIT authority nonclient"), (Action == EPassengerAvailabilityAction::Grant) == (Phase == ELifecyclePhase::POST_INITIALIZATION && !Client && Authority));
+            TestTrue(TEXT("Locked Freight never grants"), DecidePassengerAvailability(Phase, true, true, Client, Authority, true, true, false, false, false) == EPassengerAvailabilityAction::None);
         }
-        TestFalse(TEXT("No world no grant"), ShouldGrantPassengerRecipe(Phase, false, false, true, true, false));
-        TestFalse(TEXT("Unregistered recipe no grant"), ShouldGrantPassengerRecipe(Phase, true, false, true, false, false));
-        TestFalse(TEXT("Idempotent grant attempt"), ShouldGrantPassengerRecipe(Phase, true, false, true, true, true));
+#else
+        AddError(TEXT("Missing Freight lifecycle decision; legacy unconditional grant is not progression"));
+#endif
     }
     UTsabsPassengerWorldModule* First = NewObject<UTsabsPassengerWorldModule>();
     UTsabsPassengerWorldModule* Second = NewObject<UTsabsPassengerWorldModule>();

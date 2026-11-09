@@ -16,7 +16,7 @@ class TSABSPASSENGERWAGON_API UTsabsPassengerHUD : public UUserWidget
 public:
     UTsabsPassengerHUD(const FObjectInitializer& Initializer);
     UFUNCTION(BlueprintPure, Category="Passenger Interface")
-    static FText FormatExitPrompt(const FText& LeaveKey, bool bWithinSpeedLimit);
+    static FText FormatExitPrompt(const FText& LeaveKey);
     /** Informational display only; never used by access guards. */
     UFUNCTION(BlueprintPure, Category="Passenger Interface")
     static FText FormatPassengerSpeed(float SpeedCmPerSecond, bool bAvailable);
@@ -25,9 +25,6 @@ public:
     void BeginCrosshairSuppression();
     void EndCrosshairSuppression();
     bool ShouldSuppressPassengerCrosshair(const FMulticastScriptDelegate& Delegate) const;
-    /** Event-driven local feedback, never an availability/exit authority decision. */
-    UFUNCTION()
-    void NotifyExitSpeedRejected();
 protected:
     virtual void NativeOnInitialized() override;
     virtual void NativeConstruct() override;
@@ -41,6 +38,7 @@ private:
     TWeakObjectPtr<APlayerController> CrosshairController;
     uint64 CrosshairToken = 0;
     friend class FTsabsResolvedExitKeyTest;
+    friend class FTsabsTwoPassengerIsolationTest;
     friend class FTsabsPassengerSpeedLifecycleTest;
     void InitializeSpeedometer(class UCanvasPanel* Canvas);
     void RefreshPassengerSpeed();
@@ -60,6 +58,5 @@ private:
     FText LastPrompt;
     bool bHasPrompt = false;
     bool bReportedMissingContract = false;
-    float ExitSpeedWarningSecondsRemaining = 0.0f;
 };
 

@@ -12,15 +12,28 @@
 #include "Components/SkeletalMeshComponent.h"
 #include <bit>
 
+template<class T>
+static ATsabsPassengerAnchor* NativeFirstAvailablePlace(T* Car)
+{
+    if constexpr (requires { Car->FindAvailablePassengerAnchor(); }) return Car->FindAvailablePassengerAnchor();
+    else return Car->GetPilotAnchor();
+}
+template<class T>
+static bool NativeFirstExactReservation(T* Car, AFGCharacterPlayer* Who, ATsabsPassengerAnchor* Place)
+{
+    if constexpr (requires { Car->IsBoardingReservationValid(Who, Place); }) return Car->IsBoardingReservationValid(Who, Place);
+    else return Car->IsBoardingReservationValid(Who);
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTsabsBoardingGuardsTest,
-    "Tsabs.Passenger.Boarding.ServerIdentityAndFeedback",
+    "Tsabs.Passenger.NativeFirst.Boarding.NoCustomSpeedGateKeepsIdentityChecks",
     EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 bool FTsabsBoardingGuardsTest::RunTest(const FString& Parameters)
 {
     UWorld* World = UWorld::CreateWorld(EWorldType::EditorPreview, false);
     GEngine->CreateNewWorldContext(EWorldType::EditorPreview).SetCurrentWorld(World);
     ATsabsPassengerRailcar* Car = World->SpawnActor<ATsabsPassengerRailcar>();
-    Car->EnsurePilotAnchor();
+    Car->EnsurePassengerAnchors();
     AFGCharacterPlayer* Character = World->SpawnActor<AFGCharacterPlayer>();
     AFGPlayerController* PC = World->SpawnActor<AFGPlayerController>();
     // Reflected ENGINE pointer data only, NOT Possess(), a connected player,
@@ -59,17 +72,18 @@ bool FTsabsBoardingGuardsTest::RunTest(const FString& Parameters)
     TestFalse(TEXT("Authority rejects non-authority controller data"), Car->IsBoardingCharacterValid(Character));
     PC->SetRole(ROLE_Authority);
     auto* Movement = Car->GetRailroadVehicleMovementComponent();
-    const uint32 MovingBits[]{0x44505556u, 0xc4505556u, 0x44610000u, 0xc4610000u, 0x7fc00000u, 0x7f800000u, 0xff800000u};
-    for (uint32 Bits : MovingBits)
+    Movement->SetForwardSpeed(0.0f);
+    const ETsabsBoardingFeedback WithoutVelocityPolicy = Car->GetBoardingFeedback(Character);
+    // Fixed native SDK/identity/selection boundaries; NOT successful native boarding.
+    const uint32 VelocityBits[]{0x00000000u, 0x80000000u, 0x00000001u,
+        0x44505555u, 0xc4505555u, 0x44505556u, 0xc4505556u,
+        0x44610000u, 0xc4610000u, 0x7f7fffffu, 0xff7fffffu,
+        0x7fc00000u, 0x7f800000u, 0xff800000u};
+    for (uint32 Bits : VelocityBits)
     {
         Movement->SetForwardSpeed(std::bit_cast<float>(Bits));
-        TestTrue(FString::Printf(TEXT("Server feedback rejects speed bits %08x"), Bits), Car->GetBoardingFeedback(Character) == ETsabsBoardingFeedback::Moving);
-    }
-    for (uint32 Bits : {0x00000000u, 0x80000000u, 0x00000001u, 0x80000001u, 0x3f800000u, 0xbf800000u, 0x437a0000u, 0xc37a0000u, 0x43960000u, 0xc3960000u, 0x443b8000u, 0xc43b8000u, 0x44480000u, 0xc4480000u, 0x44505555u, 0xc4505555u})
-    {
-        Movement->SetForwardSpeed(std::bit_cast<float>(Bits));
-        // No physical base-game body in EditorPreview: no invented native success.
-        TestTrue(TEXT("Below-limit value is not rejected as too fast"), Car->GetBoardingFeedback(Character) != ETsabsBoardingFeedback::Moving);
+        TestTrue(FString::Printf(TEXT("Own feedback adds no velocity rule for bits %08x"), Bits),
+            Car->GetBoardingFeedback(Character) == WithoutVelocityPolicy);
     }
     Movement->SetForwardSpeed(0.0f);
     {
@@ -80,9 +94,39 @@ bool FTsabsBoardingGuardsTest::RunTest(const FString& Parameters)
     }
     if (TestNotNull(TEXT("Native driver data"), DriverProperty))
     {
-        DriverProperty->SetObjectPropertyValue_InContainer(Car->GetPilotAnchor(), Character);
-        TestTrue(TEXT("Native occupant reports busy"), Car->GetBoardingFeedback(Character) == ETsabsBoardingFeedback::Busy);
-        DriverProperty->SetObjectPropertyValue_InContainer(Car->GetPilotAnchor(), nullptr);
+        auto* First = Car->GetPilotAnchor();
+        auto* SecondField = FindFProperty<FObjectPropertyBase>(Car->GetClass(), TEXT("SecondPassengerAnchor"));
+        auto* Second = SecondField ? Cast<ATsabsPassengerAnchor>(SecondField->GetObjectPropertyValue_InContainer(Car)) : nullptr;
+        if (!TestNotNull(TEXT("Second stable place for authoritative selection fixture"), Second)) return false;
+        auto* OtherCharacter = World->SpawnActor<AFGCharacterPlayer>();
+        TestTrue(TEXT("First free stable place is selected automatically"), NativeFirstAvailablePlace(Car) == First);
+        DriverProperty->SetObjectPropertyValue_InContainer(First, Character);
+        TestTrue(TEXT("Occupied first selects the second, including offline-shaped native driver"), NativeFirstAvailablePlace(Car) == Second);
+        DriverProperty->SetObjectPropertyValue_InContainer(Second, OtherCharacter);
+        TestNull(TEXT("Full two-place car has no third available place"), NativeFirstAvailablePlace(Car));
+        TestTrue(TEXT("Both native occupants report busy"), Car->GetBoardingFeedback(Character) == ETsabsBoardingFeedback::Busy);
+        DriverProperty->SetObjectPropertyValue_InContainer(First, nullptr);
+        TestTrue(TEXT("Freed first is reusable while second remains occupied"), NativeFirstAvailablePlace(Car) == First);
+        TestTrue(TEXT("Selecting another place never replaces second occupant"), Second->GetDriver() == OtherCharacter);
+        DriverProperty->SetObjectPropertyValue_InContainer(Second, nullptr);
+        if (BestActorProperty)
+        {
+            BestActorProperty->SetObjectPropertyValue_InContainer(Character, Car);
+            FScopedPassengerBoardingReservation Scope(Car->BoardingReservation, Character);
+            TestFalse(TEXT("Character-only transaction has no implicit place grant"), NativeFirstExactReservation(Car, Character, First));
+            // Data injection in test-only friend scope: not a native entry/possession.
+            auto BindPlace = []<class T>(T* Vehicle, ATsabsPassengerAnchor* Anchor)
+            {
+                if constexpr (requires { Vehicle->BoardingAnchor; }) Vehicle->BoardingAnchor = Anchor;
+            };
+            BindPlace(Car, Second);
+            TestTrue(TEXT("Exact character plus second anchor grant is valid"), NativeFirstExactReservation(Car, Character, Second));
+            TestFalse(TEXT("Second-place reservation cannot authorize first place"), NativeFirstExactReservation(Car, Character, First));
+            TestFalse(TEXT("Another character cannot use the second-place grant"), NativeFirstExactReservation(Car, OtherCharacter, Second));
+            TestNull(TEXT("In-flight transaction never advertises another free place"), NativeFirstAvailablePlace(Car));
+            BindPlace(Car, nullptr);
+            BestActorProperty->SetObjectPropertyValue_InContainer(Character, nullptr);
+        }
     }
     FUseState Forged;
     Forged.bIsTraceHit = true;

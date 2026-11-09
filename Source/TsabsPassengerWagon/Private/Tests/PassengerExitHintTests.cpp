@@ -1,36 +1,32 @@
 #if WITH_DEV_AUTOMATION_TESTS
 #include "Misc/AutomationTest.h"
-#include "Blueprint/UserWidget.h"
+#include "TsabsPassengerHUD.h"
+
+// Same test exercises the real legacy formatter for RED and real reduced API for GREEN.
+template<class T>
+static FText NativeFirstExitHint(const FText& Key)
+{
+    if constexpr (requires { T::FormatExitPrompt(Key); }) return T::FormatExitPrompt(Key);
+    else return T::FormatExitPrompt(Key, false);
+}
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTsabsPassengerExitHintTest,
-    "Tsabs.Passenger.Interface.ExitPromptUsesStandardKeyMarkup",
+    "Tsabs.Passenger.NativeFirst.Interface.ExitPromptUsesNativeKeyWithoutSpeedPolicy",
     EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
 bool FTsabsPassengerExitHintTest::RunTest(const FString& Parameters)
 {
-    UClass* HUD = FindObject<UClass>(nullptr, TEXT("/Script/TsabsPassengerWagon.TsabsPassengerHUD"));
-    if (!TestNotNull(TEXT("Local passenger presentation class"), HUD)) return false;
-    UFunction* Format = HUD->FindFunctionByName(TEXT("FormatExitPrompt"));
-    if (!TestNotNull(TEXT("Exit presentation uses the normal interaction-text contract"), Format)) return false;
-    struct FParams { FText LeaveKey; bool bWithinSpeedLimit; FText ReturnValue; } Args;
+    UFunction* Format = UTsabsPassengerHUD::StaticClass()->FindFunctionByName(TEXT("FormatExitPrompt"));
+    if (!TestNotNull(TEXT("Own minimal exit-key formatter"), Format)) return false;
+    TestEqual(TEXT("Only key and return value, no speed-policy flag"), Format->NumParms, uint8(2));
     for (const TCHAR* Key : {TEXT("E"), TEXT("F"), TEXT("Left Alt + Q")})
     {
-        Args.LeaveKey = FText::FromString(Key);
-        Args.bWithinSpeedLimit = true;
-        Args.ReturnValue = FText::GetEmpty();
-        HUD->GetDefaultObject()->ProcessEvent(Format, &Args);
-        TestTrue(TEXT("Current binding uses the standard key capsule markup"),
-            Args.ReturnValue.ToString().Contains(FString::Printf(TEXT("<Key>%s</>"), Key)));
-        TestTrue(TEXT("Action describes dismounting"), Args.ReturnValue.ToString().Contains(TEXT("bajar del vagón")));
+        const FString Prompt = NativeFirstExitHint<UTsabsPassengerHUD>(FText::FromString(Key)).ToString();
+        TestTrue(TEXT("Actual binding uses standard key capsule markup"), Prompt.Contains(FString::Printf(TEXT("<Key>%s</>"), Key)));
+        TestTrue(TEXT("Action describes dismounting"), Prompt.Contains(TEXT("bajar del vagón")));
+        TestFalse(TEXT("Normal hint has no invented speed requirement"), Prompt.Contains(TEXT("km/h")));
     }
-    Args.bWithinSpeedLimit = false;
-    HUD->GetDefaultObject()->ProcessEvent(Format, &Args);
-    TestFalse(TEXT("At-or-above-limit text does not advertise an exit key"), Args.ReturnValue.ToString().Contains(TEXT("<Key>")));
-    TestTrue(TEXT("30 km/h access limit is explained"), Args.ReturnValue.ToString().Contains(TEXT("30")) && Args.ReturnValue.ToString().Contains(TEXT("km/h")));
-    Args.bWithinSpeedLimit = true;
-    Args.LeaveKey = FText::GetEmpty();
-    HUD->GetDefaultObject()->ProcessEvent(Format, &Args);
-    TestFalse(TEXT("An unmapped action never invents an E binding or unknown-key icon"), Args.ReturnValue.ToString().Contains(TEXT("<Key>")));
+    TestFalse(TEXT("Unmapped action never invents a binding"),
+        NativeFirstExitHint<UTsabsPassengerHUD>(FText::GetEmpty()).ToString().Contains(TEXT("<Key>")));
     return true;
 }
 #endif

@@ -20,9 +20,8 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category="Passenger Anchor")
     bool ResetPassengerAnchor();
 
-    /** Approved absolute-speed access rule using the own railcar's real movement component. */
-    UFUNCTION(BlueprintPure, Category="Passenger Anchor")
-    bool IsWithinPassengerAccessSpeedLimit();
+    /** Valid attached outer car only; no velocity policy or entry authorization. */
+    class ATsabsPassengerRailcar* GetPassengerRailcar() const;
 
     /** Chassis-derived candidate + native safe-exit query, no teleport or occupant mutation. */
     bool TryGetPassengerExitOffset(AFGCharacterPlayer* Character, FVector& OutOffset);
@@ -51,9 +50,6 @@ protected:
     virtual void AddInputBindings(UInputComponent* InInputComponent) override;
 
 private:
-    /** Owning passenger only; a denied Leave request is never broadcast. */
-    UFUNCTION(Client, Reliable)
-    void Client_NotifyExitSpeedRejected();
     void RemovePassengerHUD();
     TWeakObjectPtr<class UTsabsPassengerHUD> PassengerHUD;
     // Bounded diagnostics: at most one line per exit outcome for each pilot.

@@ -127,8 +127,16 @@ bool FTsabsAnchorInputTest::RunTest(const FString& Parameters)
     TestTrue(TEXT("Exit event is bound once per press"), LeaveBound);
     return true;
 }
+// Transition fixture calls real legacy policy for RED, structural getter for GREEN.
+template<class T>
+static bool NativeFirstAttachedCar(T* Anchor, ATsabsPassengerRailcar* Car)
+{
+    if constexpr (requires { Anchor->GetPassengerRailcar(); }) return Anchor->GetPassengerRailcar() == Car;
+    else return Anchor->IsWithinPassengerAccessSpeedLimit();
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTsabsAnchorAttachmentTest,
-    "Tsabs.Passenger.Anchor.ServerAttachmentAndSpeedPolicy",
+    "Tsabs.Passenger.NativeFirst.Anchor.StructuralAttachmentIndependentOfSpeed",
     EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FTsabsAnchorAttachmentTest::RunTest(const FString& Parameters)
@@ -137,7 +145,6 @@ bool FTsabsAnchorAttachmentTest::RunTest(const FString& Parameters)
     UFunction* SpeedAccess = ATsabsPassengerAnchor::StaticClass()->FindFunctionByName(TEXT("IsWithinPassengerAccessSpeedLimit"));
     UFunction* Reset = ATsabsPassengerAnchor::StaticClass()->FindFunctionByName(TEXT("ResetPassengerAnchor"));
     if (!TestNotNull(TEXT("Server initialization API exists"), Initialize) |
-        !TestNotNull(TEXT("Passenger access speed query exists"), SpeedAccess) |
         !TestNotNull(TEXT("Empty anchor cleanup API exists"), Reset)) return false;
     UWorld* World = UWorld::CreateWorld(EWorldType::EditorPreview, false);
     if (!TestNotNull(TEXT("Isolated editor world exists, not a game session"), World)) return false;
@@ -150,12 +157,13 @@ bool FTsabsAnchorAttachmentTest::RunTest(const FString& Parameters)
         return false;
     }
     // Direct C++ calls: AActor::ProcessEvent intentionally ignores uninitialized editor worlds.
-    auto QuerySpeedAccess = [&]() { return Anchor->IsWithinPassengerAccessSpeedLimit(); };
+    TestNull(TEXT("Old custom speed-policy API is no longer registered"), SpeedAccess);
+    auto QuerySpeedAccess = [&]() { return NativeFirstAttachedCar(Anchor, Car); };
     auto Init = [&](ATsabsPassengerRailcar* Vehicle, const FTransform& RelativeTransform)
     {
         return Anchor->InitializePassengerAnchor(Vehicle, RelativeTransform);
     };
-    TestFalse(TEXT("Missing outer car is never stopped-accessible"), QuerySpeedAccess());
+    TestFalse(TEXT("Missing outer car is never a valid passenger attachment"), QuerySpeedAccess());
     TestFalse(TEXT("Null outer car cannot initialize"), Init(nullptr, FTransform::Identity));
     FTransform Invalid = FTransform::Identity;
     Invalid.SetTranslation(FVector(std::numeric_limits<double>::quiet_NaN(), 0.0, 0.0));
@@ -186,13 +194,13 @@ bool FTsabsAnchorAttachmentTest::RunTest(const FString& Parameters)
             {0x3f800000u, true}, {0xbf800000u, true}, {0x437a0000u, true}, {0xc37a0000u, true},
             {0x43960000u, true}, {0xc3960000u, true}, {0x443b8000u, true}, {0xc43b8000u, true},
             {0x44480000u, true}, {0xc4480000u, true},
-            {0x44505555u, true}, {0xc4505555u, true}, {0x44505556u, false}, {0xc4505556u, false},
-            {0x44610000u, false}, {0xc4610000u, false}, {0x7fc00000u, false},
-            {0x7f800000u, false}, {0xff800000u, false}};
+            {0x44505555u, true}, {0xc4505555u, true}, {0x44505556u, true}, {0xc4505556u, true},
+            {0x44610000u, true}, {0xc4610000u, true}, {0x7fc00000u, true},
+            {0x7f800000u, true}, {0xff800000u, true}};
         for (const FCase& Case : Cases)
         {
             Movement->SetForwardSpeed(std::bit_cast<float>(Case.Bits));
-            TestEqual(FString::Printf(TEXT("Actual rail speed bits %08x obey strict below-30-km/h rule"), Case.Bits), QuerySpeedAccess(), Case.Expected);
+            TestEqual(FString::Printf(TEXT("Structural attachment is independent of velocity bits %08x"), Case.Bits), QuerySpeedAccess(), Case.Expected);
         }
         Movement->SetForwardSpeed(0.0f);
     }
@@ -202,13 +210,13 @@ bool FTsabsAnchorAttachmentTest::RunTest(const FString& Parameters)
     TestFalse(TEXT("Client-role cleanup is rejected"), Anchor->ResetPassengerAnchor());
     Anchor->SetRole(ROLE_Authority);
     Anchor->DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);
-    TestFalse(TEXT("Detached anchor cannot grant stopped access"), QuerySpeedAccess());
+    TestFalse(TEXT("Detached anchor cannot name a valid attached passenger car"), QuerySpeedAccess());
     TestTrue(TEXT("Empty anchor can reattach to same car"), Init(Car, Relative));
     TestTrue(TEXT("Authority resets empty anchor"), Anchor->ResetPassengerAnchor());
     TestNull(TEXT("Cleanup clears outer car"), Anchor->GetOuterVehicle());
     TestNull(TEXT("Cleanup detaches the invisible anchor"), Anchor->GetAttachParentActor());
     TestNull(TEXT("Cleanup clears owner"), Anchor->GetOwner());
-    TestFalse(TEXT("Reset anchor denies stopped access"), QuerySpeedAccess());
+    TestFalse(TEXT("Reset anchor has no attached passenger car"), QuerySpeedAccess());
     World->DestroyWorld(false);
     return true;
 }

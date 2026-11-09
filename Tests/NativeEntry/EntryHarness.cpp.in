@@ -1,0 +1,144 @@
+// ROUTING/VALIDATION BOUNDARIES ONLY: no Unreal save, RPC, possession, collision or physics.
+// Complete production definitions are inserted unchanged. Native getters/base calls
+// are catalogued data/sentinel boundaries; they do not pretend a player entered.
+#include <functional>
+#include <iostream>
+#include <string>
+#include <vector>
+struct UObject { bool Valid=true; virtual ~UObject()=default; };
+bool IsValid(const UObject* P) { return P && P->Valid; }
+template<class T,class U> T* Cast(U* P) { return dynamic_cast<T*>(P); }
+#include "PassengerBoardingReservation.h"
+struct UWorld {};
+struct AActor : UObject {
+    UWorld* World=nullptr; bool Authority=true, Template=false, Destroying=false, Local=false;
+    UWorld* GetWorld() const { return World; }
+    bool HasAuthority() const { return Authority; }
+    bool IsTemplate() const { return Template; }
+    bool IsActorBeingDestroyed() const { return Destroying; }
+    bool IsLocallyControlled() const { return Local; }
+};
+struct AController : AActor { AActor* Pawn=nullptr; AActor* GetPawn() const { return Pawn; } };
+struct AFGPlayerController : AController {};
+struct UFGHealthComponent : UObject { bool Dead=false; bool IsDead() const { return Dead; } };
+struct AFGCharacterPlayer : AActor {
+    AController* Controller=nullptr; UFGHealthComponent* Health=nullptr; AActor* Selected=nullptr; bool Driving=false;
+    AController* GetController() const { return Controller; }
+    UFGHealthComponent* GetHealthComponent() const { return Health; }
+    AActor* GetBestUsableActor() const { return Selected; }
+    bool IsDrivingVehicle() const { return Driving; }
+};
+struct FVector {};
+struct ATsabsPassengerRailcar;
+struct NativeSeatBoundary : AActor {
+    AFGCharacterPlayer* Driver=nullptr; AController* Controller=nullptr; AActor* Parent=nullptr; bool Pending=false;
+    bool NativePermission=true, NativeReturn=true; int NativeQueries=0, NativeEntries=0, ExitQueries=0;
+    AFGCharacterPlayer* SeenCharacter=nullptr;
+    AFGCharacterPlayer* GetDriver() const { return Driver; }
+    bool HasPendingDriver() const { return Pending; }
+    AController* GetController() const { return Controller; }
+    AActor* GetAttachParentActor() const { return Parent; }
+    bool CanDriverEnter(AFGCharacterPlayer*) { ++NativeQueries; return NativePermission; }
+    bool DriverEnter(AFGCharacterPlayer* Who) { ++NativeEntries; SeenCharacter=Who; return NativeReturn; }
+};
+struct ATsabsPassengerAnchor : NativeSeatBoundary {
+    using Super=NativeSeatBoundary; AActor* mOuterVehicle=nullptr; FVector mDriverExitOffset;
+    AActor* GetOuterVehicle() const { return mOuterVehicle; }
+    ATsabsPassengerRailcar* GetPassengerRailcar() const;
+    bool CanDriverEnter(AFGCharacterPlayer* Character);
+    bool DriverEnter(AFGCharacterPlayer* Character);
+    // Existing safe-exit implementation is covered by Engine geometry tests, NOT
+    // reimplemented here. A saved native entry must not query this before the world
+    // is ready; manual departure continues to validate it in production DriverLeave.
+    bool TryGetPassengerExitOffset(AFGCharacterPlayer*, FVector&) { ++ExitQueries; return false; }
+};
+struct AnchorWeakBoundary { ATsabsPassengerAnchor* Value=nullptr; ATsabsPassengerAnchor* Get() const { return Value; } };
+struct ATsabsPassengerRailcar : AActor {
+    ATsabsPassengerAnchor* PilotAnchor=nullptr; ATsabsPassengerAnchor* SecondPassengerAnchor=nullptr;
+    FPassengerBoardingReservation BoardingReservation; AnchorWeakBoundary BoardingAnchor;
+    @@TRANSACTION_INLINE@@
+    bool IsPassengerAnchor(const ATsabsPassengerAnchor* Anchor) const;
+    bool IsBoardingCharacterValid(AFGCharacterPlayer* Character) const;
+    bool CanReachBoardingBody(AFGCharacterPlayer* Character) const;
+    bool IsBoardingReservationValid(AFGCharacterPlayer* Character,const ATsabsPassengerAnchor* Anchor) const;
+};
+@@PRODUCTION_DEFINITIONS@@
+
+struct Fixture {
+    UWorld World, ForeignWorld; UFGHealthComponent Health;
+    ATsabsPassengerRailcar Car, OtherCar;
+    ATsabsPassengerAnchor First, Second;
+    AFGCharacterPlayer Character, OtherCharacter;
+    AFGPlayerController Controller;
+    Fixture() {
+        for (AActor* Actor : std::vector<AActor*>{&Car,&OtherCar,&First,&Second,&Character,&OtherCharacter,&Controller}) Actor->World=&World;
+        for (auto* Anchor : {&First,&Second}) { Anchor->mOuterVehicle=&Car; Anchor->Parent=&Car; }
+        Car.PilotAnchor=&First; Car.SecondPassengerAnchor=&Second;
+        Character.Controller=&Controller; Controller.Pawn=&Character; Character.Health=&Health; Character.Selected=&Car;
+    }
+    ATsabsPassengerAnchor* Seat(int Index) { return Index==0 ? &First : &Second; }
+};
+int Assertions=0, Failures=0, Cases=0;
+void Check(bool Value,const char* Message) { ++Assertions; if (!Value) { ++Failures; std::cout<<"ASSERT_FAIL "<<Message<<'\n'; } }
+void Run(const std::string& Name,const std::function<void()>& Body) {
+    int Before=Failures; ++Cases; Body(); std::cout<<"CASE "<<(Failures==Before?"PASS ":"FAIL ")<<Name<<'\n';
+}
+int main() {
+    for (int Slot : {0,1}) {
+        std::string Suffix="/slot="+std::to_string(Slot);
+        Run("native_no_controller"+Suffix,[&]{ Fixture F; auto* S=F.Seat(Slot); F.Character.Controller=nullptr; F.Controller.Pawn=nullptr;
+            Check(S->DriverEnter(&F.Character),"server native entry can admit an unpossessed saved character");
+            Check(S->NativeEntries==1 && S->SeenCharacter==&F.Character,"forward exact character once");
+            Check(S->ExitQueries==0,"native entry does not query exit collision before readiness"); });
+        Run("native_no_use_selection"+Suffix,[&]{ Fixture F; auto* S=F.Seat(Slot); F.Character.Selected=nullptr;
+            Check(S->DriverEnter(&F.Character),"native server entry does not invent a fresh Use action"); Check(S->NativeEntries==1,"native entry delegated once"); });
+        Run("native_denial"+Suffix,[&]{ Fixture F; auto* S=F.Seat(Slot); S->NativePermission=false;
+            Check(!S->DriverEnter(&F.Character),"honor native permission denial"); Check(S->NativeEntries==0,"denied entry never mutates native state"); });
+        Run("native_return_false"+Suffix,[&]{ Fixture F; auto* S=F.Seat(Slot); S->NativeReturn=false;
+            Check(!S->DriverEnter(&F.Character),"return native false unmodified"); Check(S->NativeEntries==1,"still invoke original exactly once"); });
+        Run("active_use_exact"+Suffix,[&]{ Fixture F; auto* S=F.Seat(Slot); FScopedPassengerBoardingReservation Scope(F.Car.BoardingReservation,&F.Character); F.Car.BoardingAnchor.Value=S;
+            Check(S->DriverEnter(&F.Character),"exact active Use transaction forwards to native entry"); Check(S->NativeEntries==1,"one native entry for matching transaction"); });
+        Run("active_use_other_slot"+Suffix,[&]{ Fixture F; auto* S=F.Seat(Slot); FScopedPassengerBoardingReservation Scope(F.Car.BoardingReservation,&F.Character); F.Car.BoardingAnchor.Value=F.Seat(1-Slot);
+            Check(!S->DriverEnter(&F.Character),"cannot steal a reservation for another anchor"); Check(S->NativeEntries==0,"wrong slot never reaches native mutation"); });
+        Run("active_use_other_character"+Suffix,[&]{ Fixture F; auto* S=F.Seat(Slot); FScopedPassengerBoardingReservation Scope(F.Car.BoardingReservation,&F.OtherCharacter); F.Car.BoardingAnchor.Value=S;
+            Check(!S->DriverEnter(&F.Character),"cannot steal another character reservation"); Check(S->NativeEntries==0,"wrong character never reaches native mutation"); });
+        Run("active_use_wrong_selection"+Suffix,[&]{ Fixture F; auto* S=F.Seat(Slot); FScopedPassengerBoardingReservation Scope(F.Car.BoardingReservation,&F.Character); F.Car.BoardingAnchor.Value=S; F.Character.Selected=&F.OtherCar;
+            Check(!S->DriverEnter(&F.Character),"active Use still requires native server target"); Check(S->NativeEntries==0,"selection failure never mutates entry"); });
+        Run("offline_occupied"+Suffix,[&]{ Fixture F; auto* S=F.Seat(Slot); S->Driver=&F.OtherCharacter;
+            Check(!S->DriverEnter(&F.Character),"offline driver is occupied even without a controller"); Check(S->NativeEntries==0,"never replace offline occupant"); });
+        Run("pending_occupied"+Suffix,[&]{ Fixture F; auto* S=F.Seat(Slot); S->Pending=true;
+            Check(!S->DriverEnter(&F.Character),"pending driver is protected"); Check(S->NativeEntries==0,"no native mutation of pending seat"); });
+        Run("controller_occupied"+Suffix,[&]{ Fixture F; auto* S=F.Seat(Slot); S->Controller=&F.Controller;
+            Check(!S->DriverEnter(&F.Character),"controller-owned seat is protected"); Check(S->NativeEntries==0,"no controller theft"); });
+        Run("foreign_world"+Suffix,[&]{ Fixture F; auto* S=F.Seat(Slot); F.Character.World=&F.ForeignWorld;
+            Check(!S->DriverEnter(&F.Character),"cross-world character rejected"); Check(S->NativeEntries==0,"no cross-world entry"); });
+        Run("foreign_parent"+Suffix,[&]{ Fixture F; auto* S=F.Seat(Slot); S->Parent=&F.OtherCar;
+            Check(!S->DriverEnter(&F.Character),"independent attachment identity checked"); Check(S->NativeEntries==0,"no foreign-parent mutation"); });
+        Run("foreign_outer"+Suffix,[&]{ Fixture F; auto* S=F.Seat(Slot); S->mOuterVehicle=&F.OtherCar;
+            Check(!S->DriverEnter(&F.Character),"foreign native outer rejected"); Check(S->NativeEntries==0,"no foreign-outer mutation"); });
+        Run("unregistered_anchor"+Suffix,[&]{ Fixture F; auto* S=F.Seat(Slot); if(Slot==0) F.Car.PilotAnchor=nullptr; else F.Car.SecondPassengerAnchor=nullptr;
+            Check(!S->DriverEnter(&F.Character),"attached unregistered actor is not a third place"); Check(S->NativeEntries==0,"no third-place mutation"); });
+        Run("client_seat"+Suffix,[&]{ Fixture F; auto* S=F.Seat(Slot); S->Authority=false; F.Character.Local=true;
+            Check(!S->DriverEnter(&F.Character),"client cannot mutate entry"); Check(S->NativeEntries==0,"client never invokes native mutation"); });
+        Run("client_character"+Suffix,[&]{ Fixture F; auto* S=F.Seat(Slot); F.Character.Authority=false;
+            Check(!S->DriverEnter(&F.Character),"server refuses client-role character data"); Check(S->NativeEntries==0,"no forged role entry"); });
+        Run("client_car"+Suffix,[&]{ Fixture F; auto* S=F.Seat(Slot); F.Car.Authority=false;
+            Check(!S->DriverEnter(&F.Character),"server requires authoritative outer car"); Check(S->NativeEntries==0,"no non-authority-car entry"); });
+        Run("template_character"+Suffix,[&]{ Fixture F; auto* S=F.Seat(Slot); F.Character.Template=true;
+            Check(!S->DriverEnter(&F.Character),"template is never a passenger"); Check(S->NativeEntries==0,"no template mutation"); });
+        Run("destroying_character"+Suffix,[&]{ Fixture F; auto* S=F.Seat(Slot); F.Character.Destroying=true;
+            Check(!S->DriverEnter(&F.Character),"destroying character is never admitted"); Check(S->NativeEntries==0,"no destroyed identity mutation"); });
+        Run("wrong_controller_pawn"+Suffix,[&]{ Fixture F; auto* S=F.Seat(Slot); F.Controller.Pawn=&F.OtherCharacter;
+            Check(!S->DriverEnter(&F.Character),"existing controller must still own exact character"); Check(S->NativeEntries==0,"no contradictory controller ownership"); });
+        Run("foreign_controller_world"+Suffix,[&]{ Fixture F; auto* S=F.Seat(Slot); F.Controller.World=&F.ForeignWorld;
+            Check(!S->DriverEnter(&F.Character),"existing controller world must match"); Check(S->NativeEntries==0,"no foreign controller entry"); });
+        Run("already_driving"+Suffix,[&]{ Fixture F; auto* S=F.Seat(Slot); F.Character.Driving=true;
+            Check(!S->DriverEnter(&F.Character),"already-driving character never duplicates"); Check(S->NativeEntries==0,"no double entry"); });
+        Run("duplicate_saved_reference"+Suffix,[&]{ Fixture F; auto* S=F.Seat(Slot); F.Car.PilotAnchor=S; F.Car.SecondPassengerAnchor=S;
+            Check(!S->DriverEnter(&F.Character),"duplicate saved references are not two valid slots"); Check(S->NativeEntries==0,"no ambiguous saved identity entry"); });
+        Run("null_character"+Suffix,[&]{ Fixture F; auto* S=F.Seat(Slot);
+            Check(!S->DriverEnter(nullptr),"null passenger rejected"); Check(S->NativeEntries==0,"null never reaches native mutation"); });
+    }
+    std::cout<<"SUMMARY cases="<<Cases<<" assertions="<<Assertions<<" failures="<<Failures<<'\n';
+    return Failures?1:0;
+}

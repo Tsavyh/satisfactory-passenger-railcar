@@ -7,7 +7,7 @@
 #include "Engine/Texture2D.h"
 #include "TsabsPassengerRailcar.h"
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTsabsDescriptorTest, "Tsabs.Passenger.Content.NativeDescriptor", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTsabsDescriptorTest, "Tsabs.Passenger.NativeFirst.Content.NativeDescriptor", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 bool FTsabsDescriptorTest::RunTest(const FString& Parameters)
 {
     UClass* Class = LoadClass<UFGVehicleDescriptor>(nullptr, TEXT("/Script/TsabsPassengerWagon.TsabsPassengerDescriptor"));
@@ -15,8 +15,8 @@ bool FTsabsDescriptorTest::RunTest(const FString& Parameters)
     TestTrue(TEXT("Native concrete descriptor"), Class->HasAnyClassFlags(CLASS_Native) && !Class->HasAnyClassFlags(CLASS_Abstract));
     const UFGVehicleDescriptor* Descriptor = Class->GetDefaultObject<UFGVehicleDescriptor>();
     TestEqual(TEXT("Describes existing passenger car, not freight"), Descriptor->mVehicleClass.Get(), ATsabsPassengerRailcar::StaticClass());
-    TestEqual(TEXT("Name uses real virtual instance accessor"), Descriptor->GetItemNameFromInstance().ToString(), FString(TEXT("Vagón de pasajeros (prueba)")));
-    TestFalse(TEXT("Description is explicit"), Descriptor->GetItemDescriptionFromInstance().IsEmpty());
+    TestEqual(TEXT("Name uses real virtual instance accessor"), Descriptor->GetItemNameFromInstance().ToString(), FString(TEXT("Vagón de pasajeros")));
+    TestEqual(TEXT("Description reflects candidate two-passenger behavior without retired speed rule"), Descriptor->GetItemDescriptionFromInstance().ToString(), FString(TEXT("Vagón para 2 pasajeros sin controlar el tren ni transportar carga. Cada pasajero dispone de cámara exterior giratoria y velocímetro.")));
     UClass* Category = Descriptor->GetCategoryFromInstance();
     TestNotNull(TEXT("Category resolves"), Category);
     if (Category) {

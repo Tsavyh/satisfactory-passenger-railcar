@@ -95,7 +95,7 @@ bool FTsabsDestroyedAnchorSafetyTest::RunTest(const FString& Parameters)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTsabsRestorationIdempotenceTest,
-    "Tsabs.Passenger.Lifecycle.RepeatedRestorationHookKeepsSinglePilot",
+    "Tsabs.Passenger.NativeFirst.Capacity.NativeLifecycleCreatesExactlyTwoPlaces",
     EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 bool FTsabsRestorationIdempotenceTest::RunTest(const FString& Parameters)
 {
@@ -127,7 +127,7 @@ bool FTsabsRestorationIdempotenceTest::RunTest(const FString& Parameters)
     int32 LiveAnchors = 0;
     for (TActorIterator<ATsabsPassengerAnchor> It(World); It; ++It)
         if (IsValid(*It) && !It->IsActorBeingDestroyed()) ++LiveAnchors;
-    TestEqual(TEXT("Exactly one live pilot after all callbacks"), LiveAnchors, 1);
+    TestEqual(TEXT("Exactly two live places after all callbacks"), LiveAnchors, 2);
     return true;
 }
 #endif

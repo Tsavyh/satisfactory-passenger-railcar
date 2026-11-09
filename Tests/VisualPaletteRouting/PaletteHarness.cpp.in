@@ -1,0 +1,39 @@
+#include <cassert>
+#include <cstdio>
+#include <vector>
+struct FFactoryCustomizationData { int marker; };
+struct UMeshComponent { int marker; };
+struct Event { int kind; const void* object; const void* data; };
+static std::vector<Event> Events;
+struct UFGBlueprintFunctionLibrary {
+    static void ApplyCustomizationPrimitiveDataToComponent(UMeshComponent* component, const FFactoryCustomizationData& data, int fallback=0) {
+        assert(fallback == 0); Events.push_back({1, component, &data});
+    }
+};
+class AFGVehicle {
+public:
+    void OnCustomizationDataApplied(const FFactoryCustomizationData& data) { Events.push_back({0, this, &data}); }
+};
+class ATsabsPassengerRailcar : public AFGVehicle {
+public:
+    using Super = AFGVehicle;
+    UMeshComponent* PassengerBodyVisual = nullptr;
+    UMeshComponent* PassengerChassisVisual = nullptr;
+    void OnCustomizationDataApplied(const FFactoryCustomizationData& data);
+};
+@@PRODUCTION_DEFINITION@@
+int main() {
+    UMeshComponent body{1}, chassis{2}; FFactoryCustomizationData data{123};
+    ATsabsPassengerRailcar car;
+    for(int flags=0; flags<4; ++flags) {
+        Events.clear(); car.PassengerBodyVisual=(flags&1)?&body:nullptr; car.PassengerChassisVisual=(flags&2)?&chassis:nullptr;
+        car.OnCustomizationDataApplied(data);
+        assert(Events.size() == static_cast<size_t>(1 + !!(flags&1) + !!(flags&2)));
+        assert(Events[0].kind==0 && Events[0].object==static_cast<AFGVehicle*>(&car) && Events[0].data==&data);
+        size_t i=1;
+        if(flags&1) { assert(Events[i].kind==1 && Events[i].object==&body && Events[i].data==&data); ++i; }
+        if(flags&2) { assert(Events[i].kind==1 && Events[i].object==&chassis && Events[i].data==&data); ++i; }
+        assert(data.marker==123 && body.marker==1 && chassis.marker==2);
+        std::printf("CASE PASS flags=%d\n", flags);
+    }
+}

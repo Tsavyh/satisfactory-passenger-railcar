@@ -17,7 +17,7 @@
 #include <bit>
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTsabsResolvedExitKeyTest,
-    "Tsabs.Passenger.Interface.ExitReadsEffectiveLeaveBindingNotGenericIcon",
+    "Tsabs.Passenger.NativeFirst.Interface.ExitBindingRemainsVisibleWithoutSpeedRule",
     EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FTsabsResolvedExitKeyTest::RunTest(const FString& Parameters)
@@ -52,61 +52,22 @@ bool FTsabsResolvedExitKeyTest::RunTest(const FString& Parameters)
     ATsabsPassengerAnchor* Anchor = Cast<ATsabsPassengerAnchor>(PC->GetPawn());
     ATsabsPassengerRailcar* Car = World->SpawnActor<ATsabsPassengerRailcar>();
     if (!TestTrue(TEXT("Prompt fixture owns an attached railcar"), Anchor->InitializePassengerAnchor(Car, FTransform::Identity))) return false;
-    Car->GetRailroadVehicleMovementComponent()->SetForwardSpeed(900.0f);
-    HUD->RefreshExitHint(true);
-    TestTrue(TEXT("Cruising at-or-above30 hides the Leave-key hint and any idle restriction"), HUD->LastPrompt.IsEmpty());
-    TestEqual(TEXT("Hidden text also collapses only the owned interaction widget"), HUD->InteractionWidget->GetVisibility(), ESlateVisibility::Collapsed);
-    UFunction* Rejection = HUD->FindFunction(TEXT("NotifyExitSpeedRejected"));
-    if (!TestNotNull(TEXT("A rejected exit attempt can notify the local passenger HUD"), Rejection)) return false;
-    HUD->ProcessEvent(Rejection, nullptr);
-    TestTrue(TEXT("Explicit rejection shows the speed explanation without a misleading key glyph"),
-        HUD->LastPrompt.EqualTo(UTsabsPassengerHUD::FormatExitPrompt(FText::FromString(TEXT("E")), false)));
-    HUD->NativeTick(FGeometry(), 2.0f);
-    TestTrue(TEXT("Rejection remains visible briefly"), HUD->LastPrompt.ToString().Contains(TEXT("30")));
-    HUD->NativeTick(FGeometry(), 1.0f);
-    TestTrue(TEXT("After three seconds the rejection clears without advertising Leave while still fast"), HUD->LastPrompt.IsEmpty());
-    TestEqual(TEXT("The rejected-attempt warning expires back to hidden"), HUD->InteractionWidget->GetVisibility(), ESlateVisibility::Collapsed);
-    HUD->NativeTick(FGeometry(), 10.0f);
-    TestFalse(TEXT("Continued fast travel cannot retrigger a rejected-attempt warning"), HUD->LastPrompt.ToString().Contains(TEXT("km/h")));
-    HUD->ProcessEvent(Rejection, nullptr);
-    HUD->NativeTick(FGeometry(), 1.0f);
-    HUD->ProcessEvent(Rejection, nullptr);
-    HUD->NativeTick(FGeometry(), 2.0f);
-    TestTrue(TEXT("A fresh rejected press restarts the short warning"), HUD->LastPrompt.ToString().Contains(TEXT("30")));
-    Car->GetRailroadVehicleMovementComponent()->SetForwardSpeed(0.0f);
-    HUD->NativeTick(FGeometry(), 0.01f);
-    TestFalse(TEXT("Slowing below30 clears a stale rejection immediately"), HUD->LastPrompt.ToString().Contains(TEXT("km/h")));
-    TestTrue(TEXT("Slowing below30 restores the effective Leave-key instruction"),
-        HUD->LastPrompt.EqualTo(UTsabsPassengerHUD::FormatExitPrompt(FText::FromString(TEXT("E")), true)));
-    TestEqual(TEXT("The passive interaction becomes visible again when allowed"), HUD->InteractionWidget->GetVisibility(), ESlateVisibility::HitTestInvisible);
-    HUD->ProcessEvent(Rejection, nullptr);
-    TestFalse(TEXT("A late server rejection cannot show the speed warning after slowing"), HUD->LastPrompt.ToString().Contains(TEXT("km/h")));
-    Car->GetRailroadVehicleMovementComponent()->SetForwardSpeed(900.0f);
-    HUD->NativeTick(FGeometry(), 0.01f);
-    TestFalse(TEXT("Accelerating again is not a new exit attempt"), HUD->LastPrompt.ToString().Contains(TEXT("km/h")));
-    TestTrue(TEXT("Accelerating again hides the ordinary Leave instruction"), HUD->LastPrompt.IsEmpty());
-    struct FVisibleCase { uint32 Bits; bool bVisible; };
-    const FVisibleCase VisibilityCases[] = {
-        {0x00000000u, true}, {0x44505555u, true}, {0x44505556u, false},
-        {0xc4505555u, true}, {0xc4505556u, false}, {0x7fc00000u, false},
-        {0x7f800000u, false}, {0xff800000u, false}};
-    for (const FVisibleCase& Case : VisibilityCases)
+    // Read-only control hint, NOT proof that native exit/placement is allowed.
+    const uint32 Speeds[] = {0x00000000u, 0x44505555u, 0x44505556u,
+        0xc4505555u, 0xc4505556u, 0x44610000u, 0x7fc00000u, 0x7f800000u, 0xff800000u};
+    for (uint32 Bits : Speeds)
     {
-        Car->GetRailroadVehicleMovementComponent()->SetForwardSpeed(std::bit_cast<float>(Case.Bits));
+        Car->GetRailroadVehicleMovementComponent()->SetForwardSpeed(std::bit_cast<float>(Bits));
+        HUD->RefreshExitHint(true);
         HUD->NativeTick(FGeometry(), 0.01f);
-        TestEqual(FString::Printf(TEXT("Leave hint visibility follows strict signed access policy: %08x"), Case.Bits),
-            !HUD->LastPrompt.IsEmpty(), Case.bVisible);
-        TestEqual(TEXT("Widget visibility matches the instruction without collapsing the ticking HUD"),
-            HUD->InteractionWidget->GetVisibility(), Case.bVisible ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
-        TestEqual(TEXT("The parent HUD remains ticking/visible even when its prompt is hidden"),
-            HUD->GetVisibility(), ESlateVisibility::HitTestInvisible);
+        TestTrue(FString::Printf(TEXT("Effective Leave-key hint is independent of speed bits %08x"), Bits),
+            HUD->LastPrompt.ToString().Contains(TEXT("<Key>E</>")));
+        TestFalse(TEXT("No custom speed warning in normal travel"), HUD->LastPrompt.ToString().Contains(TEXT("km/h")));
+        TestEqual(TEXT("Only the local informational interaction is shown"), HUD->InteractionWidget->GetVisibility(), ESlateVisibility::HitTestInvisible);
+        TestEqual(TEXT("Parent HUD remains visible"), HUD->GetVisibility(), ESlateVisibility::HitTestInvisible);
     }
-    UFunction* ClientFeedback = Anchor->FindFunction(TEXT("Client_NotifyExitSpeedRejected"));
-    if (TestNotNull(TEXT("Remote server rejection has an owning-client feedback route"), ClientFeedback))
-    {
-        TestTrue(TEXT("Feedback is a reliable client RPC"), ClientFeedback->HasAllFunctionFlags(FUNC_Net | FUNC_NetClient | FUNC_NetReliable));
-        TestFalse(TEXT("Feedback is never a multicast to other passengers"), ClientFeedback->HasAnyFunctionFlags(FUNC_NetMulticast));
-    }
+    TestNull(TEXT("Obsolete custom speed-warning RPC no longer registered"), Anchor->FindFunction(TEXT("Client_NotifyExitSpeedRejected")));
+    TestNull(TEXT("Obsolete local speed-warning event no longer registered"), HUD->FindFunction(TEXT("NotifyExitSpeedRejected")));
     Mappings.Reset();
     TestTrue(TEXT("No binding never invents E or a generic X"), HUD->ResolveLeaveKey().IsEmpty());
 
@@ -118,13 +79,11 @@ bool FTsabsResolvedExitKeyTest::RunTest(const FString& Parameters)
     Host->AddChild(Unrelated);
     TestTrue(TEXT("Old passenger HUD is actually attached before the transition"), HUD->GetParent() == Host);
     Car->GetRailroadVehicleMovementComponent()->SetForwardSpeed(900.0f);
-    HUD->NotifyExitSpeedRejected();
     const FText BeforePawnChange = HUD->LastPrompt;
     PC->SetPawn(nullptr);
     HUD->NativeTick(FGeometry(), 0.01f);
     TestNull(TEXT("Loss of owning pawn removes the old HUD from its real parent"), HUD->GetParent());
     TestTrue(TEXT("HUD removal preserves unrelated UI"), Unrelated->GetParent() == Host);
-    HUD->NotifyExitSpeedRejected();
     TestTrue(TEXT("Delayed feedback cannot mutate a HUD after pawn loss"), HUD->LastPrompt.EqualTo(BeforePawnChange));
 
     ATsabsPassengerAnchor* NextAnchor = World->SpawnActor<ATsabsPassengerAnchor>();
@@ -137,8 +96,7 @@ bool FTsabsResolvedExitKeyTest::RunTest(const FString& Parameters)
     UTsabsPassengerHUD* NextHUD = CreateWidget<UTsabsPassengerHUD>(PC, UTsabsPassengerHUD::StaticClass());
     if (!TestNotNull(TEXT("Reentry creates a fresh HUD instance"), NextHUD)) return false;
     TestTrue(TEXT("Fresh HUD is tied only to the new passenger"), NextHUD->GetPassengerAnchor() == NextAnchor);
-    TestTrue(TEXT("Fresh fast-travel HUD has no stale rejected-exit warning"), NextHUD->LastPrompt.IsEmpty());
-    TestEqual(TEXT("Fresh HUD starts with no warning countdown"), NextHUD->ExitSpeedWarningSecondsRemaining, 0.0f);
+    TestFalse(TEXT("Fresh HUD never invents a speed rejection"), NextHUD->LastPrompt.ToString().Contains(TEXT("km/h")));
     Host->AddChild(NextHUD);
     Host->AddChild(HUD);
     HUD->NativeTick(FGeometry(), 0.01f);

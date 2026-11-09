@@ -20,7 +20,7 @@ UTsabsPassengerDescriptor::UTsabsPassengerDescriptor()
 
 FText UTsabsPassengerDescriptor::GetItemNameInternal() const
 {
-    return NSLOCTEXT("TsabsPassengerWagon", "TestWagonName", "Vagón de pasajeros (prueba)");
+    return NSLOCTEXT("TsabsPassengerWagon", "TestWagonName", "Vagón de pasajeros");
 }
 FString UTsabsPassengerDescriptor::GetItemNameInternalAsString() const
 {
@@ -28,5 +28,5 @@ FString UTsabsPassengerDescriptor::GetItemNameInternalAsString() const
 }
 FText UTsabsPassengerDescriptor::GetItemDescriptionInternal() const
 {
-    return NSLOCTEXT("TsabsPassengerWagon", "TestWagonDescription", "Prototipo gratuito para pruebas. Una plaza piloto invisible, sin conducción ni inventario. Validación en partida pendiente.");
+    return NSLOCTEXT("TsabsPassengerWagon", "TestWagonDescription", "Vagón para 2 pasajeros sin controlar el tren ni transportar carga. Cada pasajero dispone de cámara exterior giratoria y velocímetro.");
 }

@@ -10,8 +10,6 @@
 #include "InputCoreTypes.h"
 #include "UObject/ConstructorHelpers.h"
 #include "TsabsPassengerRailcar.h"
-#include "FGRailroadVehicleMovementComponent.h"
-#include "PassengerAccessPolicy.h"
 #include "FGCharacterPlayer.h"
 #include "FGPlayerController.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -105,7 +103,8 @@ bool ATsabsPassengerAnchor::InitializePassengerAnchor(ATsabsPassengerRailcar* Ve
         Vehicle->GetWorld() != GetWorld() || !Vehicle->HasAuthority() || RelativeTransform.ContainsNaN() ||
         Vehicle->IsBoardingTransactionActive() ||
         GetDriver() || HasPendingDriver() || GetController() ||
-        (GetOuterVehicle() && GetOuterVehicle() != Vehicle)) return false;
+        (GetOuterVehicle() && GetOuterVehicle() != Vehicle) ||
+        (GetAttachParentActor() && GetAttachParentActor() != Vehicle)) return false;
     if (!AttachToActor(Vehicle, FAttachmentTransformRules::KeepRelativeTransform)) return false;
     SetActorRelativeTransform(RelativeTransform);
     mOuterVehicle = Vehicle; // Inherited replicated reference; do not replicate a parallel driver/outer state.
@@ -118,7 +117,8 @@ bool ATsabsPassengerAnchor::ResetPassengerAnchor()
 {
     if (!HasAuthority() || IsTemplate() || GetDriver() || HasPendingDriver() || GetController()) return false;
     const ATsabsPassengerRailcar* Vehicle = Cast<ATsabsPassengerRailcar>(mOuterVehicle);
-    if (IsValid(Vehicle) && Vehicle->IsBoardingTransactionActive()) return false;
+    if (!IsValid(Vehicle) || Vehicle->GetWorld() != GetWorld() ||
+        GetAttachParentActor() != Vehicle || Vehicle->IsBoardingTransactionActive()) return false;
     // This method never forcibly ejects, destroys or teleports an occupant.
     DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);
     mOuterVehicle = nullptr;
@@ -141,31 +141,36 @@ FBox ATsabsPassengerAnchor::GetComponentsBoundingBox(bool bNonColliding, bool bI
     return Super::GetComponentsBoundingBox(bNonColliding, bIncludeFromChildActors);
 }
 
-bool ATsabsPassengerAnchor::IsWithinPassengerAccessSpeedLimit()
+ATsabsPassengerRailcar* ATsabsPassengerAnchor::GetPassengerRailcar() const
 {
-    ATsabsPassengerRailcar* Vehicle = Cast<ATsabsPassengerRailcar>(GetOuterVehicle());
-    if (!IsValid(Vehicle) || Vehicle->IsTemplate() || Vehicle->GetWorld() != GetWorld() ||
-        GetAttachParentActor() != Vehicle) return false;
-    const UFGRailroadVehicleMovementComponent* Movement = Vehicle->GetRailroadVehicleMovementComponent();
-    return IsValid(Movement) && TsabsPassenger::IsPassengerAccessSpeedAllowed(Movement->GetForwardSpeed());
+    ATsabsPassengerRailcar* Vehicle = Cast<ATsabsPassengerRailcar>(mOuterVehicle);
+    if (IsTemplate() || IsActorBeingDestroyed() || !GetWorld() || !IsValid(Vehicle) ||
+        Vehicle->IsTemplate() || Vehicle->IsActorBeingDestroyed() || Vehicle->GetWorld() != GetWorld() ||
+        GetAttachParentActor() != Vehicle) return nullptr;
+    return Vehicle; // Structural identity only, not a boarding grant or speed rule.
 }
 
 bool ATsabsPassengerAnchor::CanDriverEnter(AFGCharacterPlayer* Character)
 {
-    if (IsTemplate() || !IsValid(Character) || Character->IsTemplate() ||
-        Character->GetWorld() != GetWorld() || (!HasAuthority() && !Character->IsLocallyControlled()) ||
-        GetDriver() || HasPendingDriver() || GetController() || Character->IsDrivingVehicle() ||
-        !IsWithinPassengerAccessSpeedLimit()) return false;
-    const AFGPlayerController* PassengerController = Cast<AFGPlayerController>(Character->GetController());
-    return IsValid(PassengerController) && PassengerController->GetPawn() == Character &&
-        Super::CanDriverEnter(Character);
+    if (IsTemplate() || IsActorBeingDestroyed() || !IsValid(Character) || Character->IsTemplate() ||
+        Character->IsActorBeingDestroyed() || Character->GetWorld() != GetWorld() ||
+        (!HasAuthority() && !Character->IsLocallyControlled()) || (HasAuthority() && !Character->HasAuthority()) ||
+        GetDriver() || HasPendingDriver() || GetController() || Character->IsDrivingVehicle()) return false;
+    const ATsabsPassengerRailcar* Vehicle = GetPassengerRailcar();
+    if (!IsValid(Vehicle) || !Vehicle->IsPassengerAnchor(this)) return false;
+    const AFGPlayerController* PC = Cast<AFGPlayerController>(Character->GetController());
+    // The native saved-entry API also handles a character with no controller.
+    // If one exists, retain the exact world/pawn/authority identity checks.
+    if (Character->GetController() && (!IsValid(PC) || PC->GetWorld() != GetWorld() ||
+        PC->GetPawn() != Character || (HasAuthority() && !PC->HasAuthority()))) return false;
+    return Super::CanDriverEnter(Character);
 }
 
 bool ATsabsPassengerAnchor::TryGetPassengerExitOffset(AFGCharacterPlayer* Character, FVector& OutOffset)
 {
     ATsabsPassengerRailcar* Vehicle = Cast<ATsabsPassengerRailcar>(mOuterVehicle);
     if (IsTemplate() || !IsValid(Character) || Character->IsTemplate() || Character->GetWorld() != GetWorld() ||
-        !IsValid(Vehicle) || Vehicle->GetPilotAnchor() != this || !IsWithinPassengerAccessSpeedLimit()) return false;
+        !IsValid(Vehicle) || !Vehicle->IsPassengerAnchor(this) || !GetPassengerRailcar()) return false;
     const USkeletalMeshComponent* Mesh = Vehicle->GetPassengerMesh();
     const UCapsuleComponent* Capsule = Character->GetCapsuleComponent();
     if (!IsValid(Mesh) || !IsValid(Capsule) || GetActorTransform().ContainsNaN()) return false;
@@ -195,30 +200,42 @@ bool ATsabsPassengerAnchor::TryGetPassengerExitOffset(AFGCharacterPlayer* Charac
         LogExitOutcome(1, TEXT("candidate_rejected"));
         return false;
     }
-    FVector NativeLocation;
-    FRotator NativeRotation;
-    // Native method is not virtual. Preserve its collision validation and
-    // native placement; never teleport to the geometric candidate ourselves.
-    if (!GetSafeExitLocation(Character, Candidate, NativeLocation, NativeRotation) ||
-        NativeLocation.ContainsNaN() || NativeRotation.ContainsNaN())
+    FVector Chosen;
+    // The geometric candidates are never placements: each must pass the native
+    // collision query. DriverLeave repeats native placement with the chosen offset.
+    const bool bFound = TsabsPassenger::TryFindSafeExitOffset(LocalChassisBounds, Radius, HalfHeight,
+        [&](const FVector& Attempt)
+        {
+            Candidate = Attempt;
+            FVector NativeLocation;
+            FRotator NativeRotation;
+            return GetSafeExitLocation(Character, Attempt, NativeLocation, NativeRotation) &&
+                !NativeLocation.ContainsNaN() && !NativeRotation.ContainsNaN();
+        }, Chosen);
+    if (!bFound)
     {
         LogExitOutcome(2, TEXT("native_rejected"));
         return false;
     }
+    Candidate = Chosen;
     LogExitOutcome(4, TEXT("native_accepted"));
-    OutOffset = Candidate;
+    OutOffset = Chosen;
     return true;
 }
 
 bool ATsabsPassengerAnchor::DriverEnter(AFGCharacterPlayer* Character)
 {
-    ATsabsPassengerRailcar* Vehicle = Cast<ATsabsPassengerRailcar>(GetOuterVehicle());
-    // Only a current server use transaction for this exact character may mutate entry.
-    if (!HasAuthority() || !IsValid(Vehicle) || Vehicle->GetPilotAnchor() != this || !Vehicle->IsBoardingReservationValid(Character) ||
-        !CanDriverEnter(Character)) return false;
-    FVector ExitOffset;
-    if (!TryGetPassengerExitOffset(Character, ExitOffset)) return false;
-    mDriverExitOffset = ExitOffset;
+    ATsabsPassengerRailcar* Vehicle = GetPassengerRailcar();
+    if (!HasAuthority() || !IsValid(Vehicle) || !Vehicle->HasAuthority() ||
+        !Vehicle->IsPassengerAnchor(this) || !CanDriverEnter(Character)) return false;
+    // New interactions keep the exact Character+Anchor reservation held by the car.
+    // Outside that transaction this remains the ordinary non-RPC native server API,
+    // also called by the game's own saved-character lifecycle. No special restore
+    // receipt, load hook, private saved-field reader or replicated occupant is added.
+    if (Vehicle->IsBoardingTransactionActive() && !Vehicle->IsBoardingReservationValid(Character, this)) return false;
+    // Native load must not require a fresh Use selection or an exit query in an
+    // unready world. New Use preflights in the car; manual DriverLeave still runs
+    // the native safe-placement query immediately before leaving.
     return Super::DriverEnter(Character);
 }
 
@@ -226,7 +243,7 @@ bool ATsabsPassengerAnchor::CanLeaveVehicle(AFGCharacterPlayer* Character)
 {
     if (IsTemplate() || !IsValid(Character) || Character->IsTemplate() ||
         Character != GetDriver() || Character->GetWorld() != GetWorld() ||
-        Character->GetDrivenVehicle() != this || !IsWithinPassengerAccessSpeedLimit()) return false;
+        Character->GetDrivenVehicle() != this || !GetPassengerRailcar()) return false;
     const AFGPlayerController* PassengerController = Cast<AFGPlayerController>(GetController());
     return IsValid(PassengerController) && PassengerController->GetPawn() == this &&
         (HasAuthority() || IsLocallyControlled()) && Super::CanLeaveVehicle(Character);
@@ -244,23 +261,10 @@ bool ATsabsPassengerAnchor::DriverLeave(bool bKeepDriving)
 
 void ATsabsPassengerAnchor::Server_DriverLeave_Implementation()
 {
-    // Never trust an earlier client-side speed/occupancy check. Recheck now on server.
+    // The possessed pawn owns this native RPC; DriverLeave rechecks identity,
+    // native exit conditions and safe placement. No custom rejection channel.
     if (!HasAuthority() || IsTemplate()) return;
-    if (!IsWithinPassengerAccessSpeedLimit())
-    {
-        const APlayerController* PC = Cast<APlayerController>(GetController());
-        if (IsValid(PC) && PC->GetPawn() == this) Client_NotifyExitSpeedRejected();
-        return;
-    }
     DriverLeave(false);
-}
-
-void ATsabsPassengerAnchor::Client_NotifyExitSpeedRejected_Implementation()
-{
-    const APlayerController* PC = Cast<APlayerController>(GetController());
-    if (!IsValid(PC) || !PC->IsLocalController() || PC->GetPawn() != this) return;
-    if (PassengerHUD.IsValid() && PassengerHUD->GetPassengerAnchor() == this)
-        PassengerHUD->NotifyExitSpeedRejected();
 }
 
 void ATsabsPassengerAnchor::CalcCamera(float DeltaTime, FMinimalViewInfo& OutResult)

@@ -20,4 +20,30 @@ inline bool TryMakeExitOffset(const FBox& BodyBounds, double CapsuleRadius, doub
     OutOffset = Candidate;
     return true;
 }
+
+// Each candidate must be accepted by the caller's native placement query.
+template <typename FValidate>
+inline bool TryFindSafeExitOffset(const FBox& LocalBounds, double CapsuleRadius,
+                                  double CapsuleHalfHeight, FValidate&& Validate,
+                                  FVector& OutOffset)
+{
+    FVector Candidate;
+    if (!TryMakeExitOffset(LocalBounds, CapsuleRadius, CapsuleHalfHeight, Candidate)) return false;
+    // Keep the doorway-centred probe first; nearby longitudinal probes can
+    // avoid a local obstruction. Each still goes through native validation.
+    const double Step = FMath::Min(100.0, LocalBounds.GetExtent().X / 3.0);
+    if (!FMath::IsFinite(Step) || Step <= 0.0) return false;
+    const double Offsets[] = {0.0, Step, -Step, 2.0 * Step, -2.0 * Step};
+    const double CenterX = Candidate.X;
+    for (double Offset : Offsets)
+    {
+        Candidate.X = CenterX + Offset;
+        if (Validate(Candidate))
+        {
+            OutOffset = Candidate;
+            return true;
+        }
+    }
+    return false;
+}
 }

@@ -8,7 +8,7 @@
 #include "EnhancedPlayerInput.h"
 #include "InputAction.h"
 #include "FGInputLibrary.h"
-#include "PassengerAccessPolicy.h"
+#include <bit>
 #include "FGPlayerController.h"
 #include "FGHUD.h"
 #include "UI/FGGameUI.h"
@@ -94,10 +94,8 @@ void UTsabsPassengerHUD::NativeDestruct()
     Super::NativeDestruct();
 }
 
-FText UTsabsPassengerHUD::FormatExitPrompt(const FText& LeaveKey, bool bWithinSpeedLimit)
+FText UTsabsPassengerHUD::FormatExitPrompt(const FText& LeaveKey)
 {
-    if (!bWithinSpeedLimit) return FText::Format(NSLOCTEXT("TsabsPassenger", "LeaveSpeedLimit",
-        "El tren debe ir a menos de {0} km/h para bajar"), FText::AsNumber(TsabsPassenger::PassengerAccessSpeedLimitKmh));
     if (LeaveKey.IsEmpty()) return NSLOCTEXT("TsabsPassenger", "LeaveStandardUnmapped",
         "Bajar del vagón: acción sin tecla asignada");
     return FText::Format(NSLOCTEXT("TsabsPassenger", "LeaveStandardKey",
@@ -273,27 +271,13 @@ bool UTsabsPassengerHUD::ApplyInteractionText(const FText& Text)
     return true;
 }
 
-void UTsabsPassengerHUD::NotifyExitSpeedRejected()
-{
-    ATsabsPassengerAnchor* Anchor = PassengerAnchor.Get();
-    // A delayed rejection cannot replace another pawn's HUD or outlive slowing.
-    if (!IsValid(Anchor) || GetOwningPlayerPawn() != Anchor || Anchor->IsWithinPassengerAccessSpeedLimit()) return;
-    ExitSpeedWarningSecondsRemaining = 3.0f;
-    RefreshExitHint(true);
-}
-
 void UTsabsPassengerHUD::RefreshExitHint(bool bForce)
 {
     ATsabsPassengerAnchor* Anchor = PassengerAnchor.Get();
     if (!IsValid(Anchor) || !IsValid(InteractionWidget)) return;
-    // Only advertise Leave while the strict speed policy allows it. Keep this
-    // parent HUD ticking: collapsing the whole HUD could prevent reappearance.
-    const bool bWithinSpeedLimit = Anchor->IsWithinPassengerAccessSpeedLimit();
-    if (bWithinSpeedLimit) ExitSpeedWarningSecondsRemaining = 0.0f;
-    const bool bShowRejection = ExitSpeedWarningSecondsRemaining > 0.0f;
-    const bool bShowPrompt = bWithinSpeedLimit || bShowRejection;
-    InteractionWidget->SetVisibility(bShowPrompt ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
-    const FText Prompt = bShowPrompt ? FormatExitPrompt(ResolveLeaveKey(), !bShowRejection) : FText::GetEmpty();
+    // Informational native-action hint, not an authorization or a speed policy.
+    InteractionWidget->SetVisibility(ESlateVisibility::HitTestInvisible);
+    const FText Prompt = FormatExitPrompt(ResolveLeaveKey());
     if (!bForce && bHasPrompt && LastPrompt.EqualTo(Prompt)) return;
     if (ApplyInteractionText(Prompt))
     {
@@ -312,8 +296,6 @@ void UTsabsPassengerHUD::NativeTick(const FGeometry& Geometry, float DeltaTime)
         RemoveFromParent();
         return;
     }
-    if (FMath::IsFinite(DeltaTime) && DeltaTime > 0.0f)
-        ExitSpeedWarningSecondsRemaining = FMath::Max(0.0f, ExitSpeedWarningSecondsRemaining - DeltaTime);
     RefreshExitHint();
 }
 

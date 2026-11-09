@@ -1,5 +1,5 @@
-# Alcance de la licencia y terceros
+# Licencias y recursos de terceros
 
-La licencia MIT se aplica al código propio de Tsabs Passenger Wagon y sus pruebas/documentación originales publicados aquí. No concede derechos sobre Satisfactory, Unreal Engine, Wwise, Satisfactory Mod Loader ni sus SDKs o recursos. Esas dependencias se obtienen por separado y conservan sus propias licencias y condiciones.
+El código propio, pruebas y documentación originales del proyecto se distribuyen bajo [MIT](LICENSE). Satisfactory, Unreal Engine, Wwise, Satisfactory Mod Loader y sus SDK conservan sus propias licencias; el proyecto no los relicencia.
 
-Las referencias a clases y rutas de assets del juego no incluyen ni relicencian esos assets. No se incorpora el modelo de pasajeros de terceros investigado durante el diseño. No se distribuyen fuentes del Engine/SDK, datos de usuario, diagnósticos privados ni símbolos PDB.
+Esta versión de prueba incluye recursos visuales modificados derivados de recursos de Satisfactory. **La licencia MIT del código no se aplica a esos recursos.** El responsable del proyecto confirma disponer de autorización de Coffee Stain para compartirlos; no se incluye aquí documentación de esa autorización. No se distribuyen fuentes del Engine/SDK, partidas, diagnósticos privados ni símbolos PDB.
