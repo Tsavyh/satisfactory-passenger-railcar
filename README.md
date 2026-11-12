@@ -5,12 +5,12 @@
 **Ride together. Let the locomotive do the driving.**  
 An unofficial passenger wagon for Satisfactory, by **Tsabs**.
 
-### 🚆 Two-passenger test build
+### 🚆 Passenger Railcar 0.1.17
 
 - Two passenger places in one wagon, with independent exterior cameras and speed displays.
 - A new passenger-car model, with no driving or cargo controls.
 
-**[Download the experimental preview](https://github.com/Tsavyh/satisfactory-passenger-railcar/releases/tag/v0.1.16-study30)** · [Español](README.es.md) · [Preview source](https://github.com/Tsavyh/satisfactory-passenger-railcar/tree/v0.1.16-study30) · [Earlier release 0.1.15](https://github.com/Tsavyh/satisfactory-passenger-railcar/releases/tag/v0.1.15)
+**[Download 0.1.17](https://github.com/Tsavyh/satisfactory-passenger-railcar/releases/tag/v0.1.17)** · [Español](README.es.md) · [Release source](https://github.com/Tsavyh/satisfactory-passenger-railcar/tree/v0.1.17) · [Earlier release 0.1.15](https://github.com/Tsavyh/satisfactory-passenger-railcar/releases/tag/v0.1.15)
 
 > **Experimental:** two-player travel, save/load and reconnection are not yet validated for this build. Independent review is incomplete. Back up your saves and use a test world.
 

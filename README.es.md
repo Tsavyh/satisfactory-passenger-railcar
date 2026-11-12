@@ -5,12 +5,12 @@
 **Viaja acompañado. La locomotora se ocupa de conducir.**  
 Vagón de pasajeros no oficial para Satisfactory, de **Tsabs**.
 
-### 🚆 Versión de prueba para dos
+### 🚆 Vagón de pasajeros 0.1.17
 
 - Dos plazas en un mismo vagón, con cámaras exteriores y velocímetros independientes.
 - Nuevo modelo de vagón, sin controles de conducción ni inventario de carga.
 
-**[Descargar la prueba experimental](https://github.com/Tsavyh/satisfactory-passenger-railcar/releases/tag/v0.1.16-study30)** · [English](README.md) · [Código de la prueba](https://github.com/Tsavyh/satisfactory-passenger-railcar/tree/v0.1.16-study30) · [Versión anterior 0.1.15](https://github.com/Tsavyh/satisfactory-passenger-railcar/releases/tag/v0.1.15)
+**[Descargar 0.1.17](https://github.com/Tsavyh/satisfactory-passenger-railcar/releases/tag/v0.1.17)** · [English](README.md) · [Código de la versión](https://github.com/Tsavyh/satisfactory-passenger-railcar/tree/v0.1.17) · [Versión anterior 0.1.15](https://github.com/Tsavyh/satisfactory-passenger-railcar/releases/tag/v0.1.15)
 
 > **Experimental:** el viaje con dos jugadores, el guardado/carga y la reconexión siguen sin validarse en esta versión. La revisión independiente está incompleta. Haz copia de tus partidas y usa un mundo de pruebas.
 
