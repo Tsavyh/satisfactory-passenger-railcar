@@ -26,9 +26,9 @@ bool FTsabsConstructionMetadataTest::RunTest(const FString& Parameters)
     if (!TestTrue(TEXT("Read actual plugin metadata"), FFileHelper::LoadFileToString(Text, *Path))) return false;
     TSharedPtr<FJsonObject> Metadata;
     if (!TestTrue(TEXT("Parse actual plugin metadata"), FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Metadata) && Metadata.IsValid())) return false;
-    TestEqual(TEXT("Candidate version integer"), Metadata->GetIntegerField(TEXT("Version")), 17);
-    TestEqual(TEXT("Candidate display version"), Metadata->GetStringField(TEXT("VersionName")), FString(TEXT("0.1.16")));
-    TestEqual(TEXT("Candidate semantic version"), Metadata->GetStringField(TEXT("SemVersion")), FString(TEXT("0.1.16")));
+    TestEqual(TEXT("Candidate version integer"), Metadata->GetIntegerField(TEXT("Version")), 18);
+    TestEqual(TEXT("Candidate display version"), Metadata->GetStringField(TEXT("VersionName")), FString(TEXT("0.1.17")));
+    TestEqual(TEXT("Candidate semantic version"), Metadata->GetStringField(TEXT("SemVersion")), FString(TEXT("0.1.17")));
     const FString Description = GetDefault<UTsabsPassengerDescriptor>()->GetItemDescriptionFromInstance().ToString();
     TestTrue(TEXT("Actual own virtual item description advertises two passengers"), Description.Contains(TEXT("2 pasajeros")));
     TestFalse(TEXT("Description never advertises retired custom speed rule"), Description.Contains(TEXT("30 km/h")));

@@ -10,9 +10,9 @@
 
 > **Experimental:** two-player gameplay, disconnection, saving/loading and dedicated servers have not yet been validated for this build. Independent review is incomplete. Use a backed-up test world, not a personal save.
 
-**[Download the Windows / Steam test build](https://github.com/Tsavyh/satisfactory-passenger-railcar/releases/tag/v0.1.16-study30)** · [Español](README.es.md) · [Build notes](BUILDING.md)
+**[Download 0.1.17 for Windows / Steam](https://github.com/Tsavyh/satisfactory-passenger-railcar/releases/tag/v0.1.17)** · [Español](README.es.md) · [Build notes](BUILDING.md)
 
-Requires Satisfactory Steam CL 517554 and SML 3.12.0. Host and clients need the same build. With the game closed, extract `TsabsPassengerWagon` into `FactoryGame/Mods/`, replacing the previous wagon after moving it outside that folder. Do not mix versions.
+Requires Satisfactory Steam CL 517554 and SML 3.12.0. Host and clients need the same build. With the game closed, copy `VAGON/TsabsPassengerWagon` from the ZIP into `FactoryGame/Mods/`, after moving the previous wagon outside that folder. Do not mix versions.
 
 The [0.1.15 release](https://github.com/Tsavyh/satisfactory-passenger-railcar/releases/tag/v0.1.15) remains available separately. Project code is [MIT](LICENSE); game-derived visual assets are not covered by that license. The build input hashes are recorded in [SOURCE-MANIFEST.json](SOURCE-MANIFEST.json).
 

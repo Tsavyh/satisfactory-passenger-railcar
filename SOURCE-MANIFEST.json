@@ -1,5 +1,5 @@
 {
-  "description": "Exact plugin inputs recorded for Study30 cook; external SDK and game required. Third-party assets are not MIT licensed.",
+  "description": "Exact inputs recorded for 0.1.17 build/cook; additional public tests and tools are not cook inputs.",
   "inputs_sha256": {
     "Content/VisualPrivate/Materials/M_PrimaryPaint.uasset": "eecdc8ce83aa72af8ae209ca43dc25fc47987dd5d66c83370fd5e534967eda04",
     "Content/VisualPrivate/Materials/M_RubberDark.uasset": "4d449b6c853d04a8e0719589eef7ea5c1afc47f004c60d977558e5f9d30eaf8e",
@@ -7,21 +7,9 @@
     "Content/VisualPrivate/Materials/M_SteelTrim.uasset": "6284e84128d05b60f1f0c4facfdb19551cca8ffe66951c325f4370540e73f7a1",
     "Content/VisualPrivate/Materials/M_WarningYellow.uasset": "c0093f77289cea727345232cdc0eb6ac3d26e159b2d69690b0473ac520643738",
     "Content/VisualPrivate/Materials/M_WindowOpaque.uasset": "1cfab5905e145d48571ea10f47d17185e33cd4f198965a2a7c3385d8486c76d7",
-    "Content/VisualPrivate/PassengerBody21_PRIVATE.uasset": "8b7ad1d81a7709050b79ef8ef3f3c7fdcf3a9d439dfa86233e989a84c7202bad",
-    "Content/VisualPrivate/Skeletal/PassengerChassis21_PRIVATE.uasset": "f89d6939148a6a95205dbcd6555a3b2cdf130c0a67012692e9e051d495b26b70",
-    "Content/VisualPrivate/Skeletal/PassengerChassis21_PRIVATE_Skeleton.uasset": "be023c2cb61e260d7c1c87dae795a7f49ee3a45a170db9bd740a59501b5f561a",
-    "Content/VisualPrivate/Study22B/PassengerBody22_PRIVATE.uasset": "3ff64b874ac2f2fc861cb1c5b8927e0c8256577af4e4a8fa65d68dd3328bdc45",
-    "Content/VisualPrivate/Study22B/Skeletal/PassengerChassis22_PRIVATE.uasset": "52cc328ad50830905bd7d262c67516806b35bd2b453fdae106d38ba2dd9e5495",
-    "Content/VisualPrivate/Study22B/Skeletal/PassengerChassis22_PRIVATE_Skeleton.uasset": "d0647e18dbdc09fc2ba9fc5cce8dfed256182343222225f46e2737d940bb61ef",
-    "Content/VisualPrivate/Study23/PassengerBody23_PRIVATE.uasset": "772f7ceb651371888b1948e6ed570ea3f56bf969a29fad2aa51d93c79d86ce50",
-    "Content/VisualPrivate/Study25/PassengerBody25_PRIVATE.uasset": "8aca753105049d89ab58ce5a567745ff8f6a141c15a557958f26ebd9ad9afdc5",
-    "Content/VisualPrivate/Study26/PassengerBody26_PRIVATE.uasset": "8dda75d0b5c018e5df9460e6a3118b1c3ad998fdd8cf00b04057d3f0ccf618ef",
     "Content/VisualPrivate/Study26/Skeletal/PassengerChassis26_PRIVATE.uasset": "466e8dec3391e972935ad2940703df613068ce07e71c0a2558431d6390499bb5",
     "Content/VisualPrivate/Study26/Skeletal/PassengerChassis26_PRIVATE_Skeleton.uasset": "70c3a5c3b28276e4a39865b0a22cfcd09d03a3c63a4266ea2ac2c653c211175e",
-    "Content/VisualPrivate/Study27B/PassengerBody27B_PRIVATE.uasset": "b6a2fa4ac87297e3b5e88a1399be84b88773875e61dc51dbccb9e3a846a02802",
     "Content/VisualPrivate/Study28/M_MarkerWarm.uasset": "f820231312a99ee12bab2d3120f098d0b64a0ae5e579a75add98d8a227e128f0",
-    "Content/VisualPrivate/Study28/PassengerBody28_PRIVATE.uasset": "7d77c153f8fd6372dde79f13ba34314b7a9e9f939445807dd094c682d59c3090",
-    "Content/VisualPrivate/Study29/PassengerBody29_PRIVATE.uasset": "de02ba614d06e9b1ba1ec9fd0e69d2e25177fea042bfb90c8967f6f2bbaad571",
     "Content/VisualPrivate/Study30/PassengerBody30_PRIVATE.uasset": "f3f142c2cafa3123598f9b4857f02e0a43d945e4f19dbc78b8ec5a6a0326426f",
     "Source/TsabsPassengerWagon/Private/PassengerChassisCompatibility.h": "ed3b49299e236563554357f96658ed581d77d0944a2c240cd76758af800a991c",
     "Source/TsabsPassengerWagon/Private/PassengerChassisSlotMapping.h": "70026ae43fcf381fe26506674b4580c06a12c48562746c83b3eb4b5a78f002c9",
@@ -33,13 +21,12 @@
     "Source/TsabsPassengerWagon/Private/Tests/PassengerAnchorTests.cpp": "8789ff939d9ad7e2ad3ceb1d45d2b7205da8bb68a586cf4caa4cc5b96bcf6d24",
     "Source/TsabsPassengerWagon/Private/Tests/PassengerAvailabilityReferenceTests.cpp": "118601b003226f8f8ca7028116a5c279038ab1ce8c669b03b1b081733410aa22",
     "Source/TsabsPassengerWagon/Private/Tests/PassengerAvailabilityTests.cpp": "5c3217203c4caa63ab0cf21e8572beecf207429ea0ad798d056bc0129369d473",
-    "Source/TsabsPassengerWagon/Private/Tests/PassengerBoardingGeometryTests.cpp": "a27e8a6418ec7b695246b39fccabc38a2eeea641ca78ae353770bd7d29d3bece",
     "Source/TsabsPassengerWagon/Private/Tests/PassengerBoardingGuardsTests.cpp": "2ea9b3cd2a31ae30bb54822d53e1b65b0ba6b0fb1b25b947faf70845fc76cc44",
     "Source/TsabsPassengerWagon/Private/Tests/PassengerBoardingPromptTests.cpp": "ba47db6a8febc40cb50966cd8940b6690a31cc3d9a3ec93d61b35ef4a131ad6a",
     "Source/TsabsPassengerWagon/Private/Tests/PassengerBoardingTests.cpp": "9fff4b886d30825649fa3528ce7d1510c1a8e7f6929d5971ff66e04f1a081a06",
     "Source/TsabsPassengerWagon/Private/Tests/PassengerCameraCollisionTests.cpp": "1fbf1701769fce73879762525a793e14a78a2ec56f5fbb7e4b05e56124fe7a82",
     "Source/TsabsPassengerWagon/Private/Tests/PassengerChassisMatchingTests.cpp": "03652fde1561834f82ab1f76c64b4c8ccb5f85cfab49e4dba605b4118b9429ed",
-    "Source/TsabsPassengerWagon/Private/Tests/PassengerConstructionMetadataTests.cpp": "76d1ee4f248e5e774e04ca3a0d9c47271d8c8aea96098a15c1650b04f71fa84d",
+    "Source/TsabsPassengerWagon/Private/Tests/PassengerConstructionMetadataTests.cpp": "9ee21f470c2f4aacfa0b3f5a388bb79204b2935d690282837af450fe18b0e011",
     "Source/TsabsPassengerWagon/Private/Tests/PassengerContentLifecycleTests.cpp": "237e80520a4ff4f60778c4875d5f6e1f195dbb33ae622efbb6517e13af2d0bee",
     "Source/TsabsPassengerWagon/Private/Tests/PassengerContentTests.cpp": "97f8057c4a751877510e50e951a3b0a8cb815c14df6afa644bbc996b687ee237",
     "Source/TsabsPassengerWagon/Private/Tests/PassengerCrosshairTests.cpp": "2c44f067300db07d0e7e5089cd613a70c6e4df6c213cc6481077d05e5540ccae",
@@ -74,7 +61,6 @@
     "Source/TsabsPassengerWagon/Private/TsabsPassengerSpringArm.cpp": "eb550210e7f4a93fd9c5dfff8b7e466095e3ee7348f82f4b13e45b323f663452",
     "Source/TsabsPassengerWagon/Private/TsabsPassengerWagonModule.cpp": "fb8dfa12f68dc717c4812d7a729f98b24e56df600eb1f26edbe148d21f94ff64",
     "Source/TsabsPassengerWagon/Private/TsabsPassengerWorldModule.cpp": "45a40cb514bb0d9c66ff5561b056f793d8bd6ba3a29b4237ee5101ff2e2ee49f",
-    "Source/TsabsPassengerWagon/Public/PassengerBoardingGeometry.h": "314db5c82877fa3c996d0984da19c8d45eebbf405533d82d72635439053721a9",
     "Source/TsabsPassengerWagon/Public/PassengerBoardingPolicy.h": "96f9bbd30a01abe6c1f9e582a56767a90bf888ddbd7fba51381e62cd9c96c2fa",
     "Source/TsabsPassengerWagon/Public/PassengerBoardingReservation.h": "e557987abed7f4ab2242cde0c4f98c8ede39ed62ff9b49eb58b4634b76c197af",
     "Source/TsabsPassengerWagon/Public/PassengerContentPolicy.h": "3caaa984519c80fd24f94d257ff09e971e73c339d4a24f276babc1327c20b5db",
@@ -97,7 +83,8 @@
     "Tests/NativeEntry/run_routing.py": "87686778c85814c578d87ccc522e250c19b94c492b148773429d5f1f6474b4a0",
     "Tests/VisualPaletteRouting/PaletteHarness.cpp.in": "e281178e6af26c17e8b2f053df004a24c87ef3e0702cad801f8c166fc1c41445",
     "Tests/VisualPaletteRouting/test_palette_routing.py": "aecdba07df3deaf4d0b6ca78844cc586b1171c0c1a2f81b9d881dec802a05c29",
-    "TsabsPassengerWagon.uplugin": "f1f5495a82fe64b3e8828b0e962fd3818ac705139295110a17cf8c74a9715013"
+    "TsabsPassengerWagon.uplugin": "0de1d1d1c423d54e6a95ff0e081d7bfb7a99f442a8edad66fe44ce9d68658990"
   },
-  "runtime_original_zip_sha256": "1b3b0fce299c00ed67b2c6ea8ee4913d5d3141089ad4a99485c14c4b508c18fc"
+  "runtime_zip_sha256": "bf170a1a6fe26e73d063da8f29e7c2af87e55939e2e43bd91b43f9829ff8ffd8",
+  "release_version": "0.1.17"
 }
